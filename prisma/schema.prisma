@@ -1,12 +1,13 @@
 // Prisma schema for workforce-app
 
 generator client {
-  provider = "prisma-client"
+  provider = "prisma-client-js"
   output   = "../src/generated/prisma"
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 // --- Auth.js (next-auth) tables ---
