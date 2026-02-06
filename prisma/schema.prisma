@@ -1,0 +1,376 @@
+// Prisma schema for workforce-app
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// --- Auth.js (next-auth) tables ---
+model User {
+  id           String    @id @default(cuid())
+  tenantId     String
+  email        String
+  name         String?
+  role         UserRole  @default(EMPLOYEE)
+  passwordHash String?
+  active       Boolean   @default(true)
+
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  departmentId String?
+  department   Department? @relation("DepartmentUsers", fields: [departmentId], references: [id])
+
+  accounts     Account[]
+  sessions     Session[]
+
+  timeEntries  TimeEntry[]
+  dailyReports DailyReport[]
+  leaveRequests LeaveRequest[]
+  attendanceCorrections AttendanceCorrection[]
+  shiftAssignments ShiftAssignment[]
+  leaveLedgerEntries LeaveLedgerEntry[]
+
+  departmentsApproving Department[] @relation("DepartmentApprover")
+  attendanceCorrectionsApproved AttendanceCorrection[] @relation("AttendanceCorrectionApprover")
+  leaveRequestsApproved LeaveRequest[] @relation("LeaveRequestApprover")
+  closesClosedBy Close[] @relation("CloseClosedBy")
+  auditLogsAsActor AuditLog[] @relation("AuditLogActor")
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([tenantId, email])
+  @@index([tenantId, role])
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// --- Multi-tenant core ---
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users      User[]
+  departments Department[]
+  shiftPatterns ShiftPattern[]
+  shiftAssignments ShiftAssignment[]
+  timeEntries TimeEntry[]
+  dailyReports DailyReport[]
+  leaveRequests LeaveRequest[]
+  leaveLedger LeaveLedgerEntry[]
+  closes Close[]
+  auditLogs AuditLog[]
+  attendanceCorrections AttendanceCorrection[]
+
+  @@index([name])
+}
+
+model Department {
+  id        String   @id @default(cuid())
+  tenantId  String
+  name      String
+  approverUserId String?
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  approver  User?    @relation("DepartmentApprover", fields: [approverUserId], references: [id])
+  users     User[]   @relation("DepartmentUsers")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+model ShiftPattern {
+  id                 String   @id @default(cuid())
+  tenantId           String
+  name               String
+  plannedStart       String   // "HH:MM" local
+  plannedEnd         String   // "HH:MM" local
+  defaultBreakMinutes Int     @default(60)
+
+  tenant             Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  assignments        ShiftAssignment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+model ShiftAssignment {
+  id             String   @id @default(cuid())
+  tenantId       String
+  userId         String
+  shiftPatternId String
+  startDate      DateTime // date-only semantics (store midnight JST)
+  endDate        DateTime // inclusive
+
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shiftPattern   ShiftPattern @relation(fields: [shiftPatternId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, userId])
+  @@index([tenantId, shiftPatternId])
+}
+
+model TimeEntry {
+  id            String   @id @default(cuid())
+  tenantId      String
+  userId        String
+  date          DateTime // date-only semantics
+
+  clockInAt     DateTime?
+  clockOutAt    DateTime?
+  breakStartAt  DateTime?
+  breakEndAt    DateTime?
+
+  workMinutes   Int      @default(0)
+  status        TimeEntryStatus @default(OPEN)
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([tenantId, userId, date])
+  @@index([tenantId, date])
+}
+
+model AttendanceCorrection {
+  id             String   @id @default(cuid())
+  tenantId       String
+  userId         String
+  date           DateTime
+
+  requestedClockInAt    DateTime?
+  requestedClockOutAt   DateTime?
+  requestedBreakStartAt DateTime?
+  requestedBreakEndAt   DateTime?
+
+  reason         String
+  status         ApprovalStatus @default(PENDING)
+
+  approverUserId String?
+  decidedAt      DateTime?
+
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  approver       User?    @relation("AttendanceCorrectionApprover", fields: [approverUserId], references: [id])
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([tenantId, status])
+  @@index([tenantId, userId, date])
+}
+
+model DailyReport {
+  id              String   @id @default(cuid())
+  tenantId        String
+  userId          String
+  date            DateTime
+
+  route           String?
+  cases           Int?
+  workHoursText   String?
+
+  incidentsText   String?
+  notesText       String?
+  announcementsText String?
+
+  status          ReportStatus @default(DRAFT)
+  submittedAt     DateTime?
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([tenantId, userId, date])
+  @@index([tenantId, date])
+}
+
+model LeaveRequest {
+  id             String   @id @default(cuid())
+  tenantId       String
+  userId         String
+
+  type           LeaveType
+  startAt        DateTime
+  endAt          DateTime
+  reason         String?
+
+  status         LeaveRequestStatus @default(PENDING)
+
+  approverUserId String?
+  decidedAt      DateTime?
+
+  // When a paid-leave request is approved, we record ledger entries.
+  ledgerEntries  LeaveLedgerEntry[]
+
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  approver       User?    @relation("LeaveRequestApprover", fields: [approverUserId], references: [id])
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([tenantId, status])
+  @@index([tenantId, userId])
+}
+
+model LeaveLedgerEntry {
+  id            String   @id @default(cuid())
+  tenantId      String
+  userId        String
+  requestId     String?
+
+  kind          LeaveLedgerKind
+  days          Decimal  @db.Decimal(10, 2)
+  note          String?
+
+  effectiveDate DateTime // date-only semantics
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  request       LeaveRequest? @relation(fields: [requestId], references: [id], onDelete: SetNull)
+
+  createdAt     DateTime @default(now())
+
+  @@index([tenantId, userId, effectiveDate])
+}
+
+model Close {
+  id          String   @id @default(cuid())
+  tenantId    String
+  month       String   // "YYYY-MM"
+  scope       CloseScope @default(COMPANY)
+  departmentId String?
+
+  closedByUserId String
+  closedAt    DateTime @default(now())
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  closedBy    User     @relation("CloseClosedBy", fields: [closedByUserId], references: [id])
+
+  @@unique([tenantId, month, scope, departmentId])
+  @@index([tenantId, month])
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  tenantId    String
+  actorUserId String?
+
+  action      String
+  entityType  String
+  entityId    String
+
+  beforeJson  Json?
+  afterJson   Json?
+
+  createdAt   DateTime @default(now())
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  actor       User?    @relation("AuditLogActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+}
+
+enum UserRole {
+  EMPLOYEE
+  APPROVER
+  ADMIN
+}
+
+enum TimeEntryStatus {
+  OPEN
+  LOCKED
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ReportStatus {
+  DRAFT
+  SUBMITTED
+}
+
+enum LeaveType {
+  PAID
+  HALF
+  HOURLY
+  ABSENCE
+}
+
+enum LeaveRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  NEEDS_ATTENTION
+}
+
+enum LeaveLedgerKind {
+  GRANT
+  ADJUST
+  USE
+}
+
+enum CloseScope {
+  COMPANY
+  DEPARTMENT
+}
