@@ -14,7 +14,8 @@ const signInSchema = z.object({
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
-  session: { strategy: "database" },
+  // Credentials provider requires JWT sessions (Auth.js limitation)
+  session: { strategy: "jwt" },
   providers: [
     Credentials({
       name: "Email and Password",
@@ -39,11 +40,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!ok) return null;
 
         // next-auth expects a plain object with an id.
+        // We'll stash app-specific fields into the JWT via callbacks.
         return {
           id: user.id,
           email: user.email,
           name: user.name,
-        };
+          tenantId: user.tenantId,
+          role: user.role,
+          departmentId: user.departmentId,
+        } as any;
       },
     }),
   ],
@@ -51,15 +56,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     signIn: "/login",
   },
   callbacks: {
-    async session({ session, user }) {
-      // attach app-specific user fields
-      const dbUser = await prisma.user.findUnique({ where: { id: user.id } });
-      if (dbUser) {
-        (session.user as any).id = dbUser.id;
-        (session.user as any).tenantId = dbUser.tenantId;
-        (session.user as any).role = dbUser.role;
-        (session.user as any).departmentId = dbUser.departmentId;
+    async jwt({ token, user }) {
+      // On initial sign-in, `user` is set (from Credentials.authorize).
+      if (user) {
+        token.sub = (user as any).id;
+        (token as any).tenantId = (user as any).tenantId;
+        (token as any).role = (user as any).role;
+        (token as any).departmentId = (user as any).departmentId;
       }
+      return token;
+    },
+    async session({ session, token }) {
+      // expose claims to the client
+      (session.user as any).id = token.sub;
+      (session.user as any).tenantId = (token as any).tenantId;
+      (session.user as any).role = (token as any).role;
+      (session.user as any).departmentId = (token as any).departmentId;
       return session;
     },
   },
