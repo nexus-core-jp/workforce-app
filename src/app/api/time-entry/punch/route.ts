@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { auth } from "@/auth";
+import { isMonthClosed } from "@/lib/close";
 import { prisma } from "@/lib/db";
 import { diffMinutes, startOfJstDay } from "@/lib/time";
 
@@ -46,6 +47,10 @@ export async function POST(req: Request) {
 
   const today = startOfJstDay(new Date());
   const now = new Date();
+
+  if (await isMonthClosed(tenantId, today)) {
+    return jsonError("This month is closed", 409);
+  }
 
   // Ensure today's TimeEntry exists (for the tenant/user/date triple)
   const entry = await prisma.timeEntry.upsert({

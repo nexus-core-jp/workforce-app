@@ -297,7 +297,8 @@ model Close {
   tenantId    String
   month       String   // "YYYY-MM"
   scope       CloseScope @default(COMPANY)
-  departmentId String?
+  // Use empty string for COMPANY scope.
+  departmentId String   @default("")
 
   closedByUserId String
   closedAt    DateTime @default(now())

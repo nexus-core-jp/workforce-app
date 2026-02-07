@@ -78,3 +78,25 @@ npm run dev
 
 - 正常: `{ ok: true, entry: TimeEntry }`
 - 異常: `{ ok: false, error: string }` + status 409/400/401
+
+## 6. 直近7日履歴
+- `/dashboard` に直近7日の打刻一覧が表示されます
+- 各行の「修正申請」から、対象日の修正申請（新規）へ遷移できます
+
+## 7. 打刻修正申請（MVP）
+### 申請（従業員）
+- `/corrections/new?date=YYYY-MM-DD`
+- MVPでは「理由」だけ必須（時刻入力UIは後で拡張）
+
+### 承認（ADMIN/APPROVER）
+- `/dashboard` に「打刻修正申請（承認）」が表示され、未処理を承認/却下できます
+- MVPでは **承認しても TimeEntry へ反映はまだしません**（次の実装で対応）
+
+## 8. 締め（Close）
+### 締め操作（ADMIN）
+- `/dashboard` の「締め（管理者）」から当月を締められます
+
+### 締め後の挙動
+- 当月が締め済みの場合：
+  - 打刻API（/api/time-entry/punch）は 409 を返して更新できません
+  - 修正申請API（/api/attendance-corrections）も 409 を返します

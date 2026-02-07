@@ -3,8 +3,11 @@ import { redirect } from "next/navigation";
 
 import { auth, signOut } from "@/auth";
 import { prisma } from "@/lib/db";
-import { formatLocal, startOfJstDay } from "@/lib/time";
+import { addJstDays, formatLocal, startOfJstDay } from "@/lib/time";
 
+import { ClosePanel } from "./ClosePanel";
+import { CorrectionsPanel } from "./CorrectionsPanel";
+import { History } from "./History";
 import { TimeClock } from "./TimeClock";
 
 export default async function DashboardPage() {
@@ -15,6 +18,7 @@ export default async function DashboardPage() {
 
   const tenantId: string = user.tenantId;
   const userId: string = user.id;
+  const role: string = user.role;
 
   const today = startOfJstDay(new Date());
   const entry = await prisma.timeEntry.findUnique({
@@ -30,6 +34,83 @@ export default async function DashboardPage() {
   const canBreakStart = !!clockInAt && !clockOutAt && !breakStartAt;
   const canBreakEnd = !!breakStartAt && !breakEndAt;
   const canClockOut = !!clockInAt && !clockOutAt && (!breakStartAt || !!breakEndAt);
+
+  // Last 7 days entries
+  const from = addJstDays(today, -6);
+  const history = await prisma.timeEntry.findMany({
+    where: {
+      tenantId,
+      userId,
+      date: {
+        gte: from,
+        lte: today,
+      },
+    },
+    orderBy: { date: "desc" },
+  });
+
+  const historyMap = new Map(history.map((h) => [h.date.toISOString(), h]));
+  const historyItems = Array.from({ length: 7 }, (_, i) => {
+    const d = addJstDays(today, -i);
+    const iso = d.toISOString();
+    const h = historyMap.get(iso);
+
+    const dateLabel = new Intl.DateTimeFormat("ja-JP", {
+      timeZone: "Asia/Tokyo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      weekday: "short",
+    }).format(d);
+
+    return {
+      dateLabel,
+      dateYmd: new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Tokyo",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(d),
+      clockInAt: h?.clockInAt ?? null,
+      breakStartAt: h?.breakStartAt ?? null,
+      breakEndAt: h?.breakEndAt ?? null,
+      clockOutAt: h?.clockOutAt ?? null,
+      workMinutes: h?.workMinutes ?? 0,
+    };
+  });
+
+  // Corrections (MVP)
+  const myPendingCount = await prisma.attendanceCorrection.count({
+    where: { tenantId, userId, status: "PENDING" },
+  });
+
+  const isAdminOrApprover = role === "ADMIN" || role === "APPROVER";
+
+  const month = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit" }).format(today);
+  const companyClose = await prisma.close.findUnique({ where: { tenantId_month_scope_departmentId: { tenantId, month, scope: "COMPANY", departmentId: "" } } });
+  const isClosed = !!companyClose;
+
+  const pendingForApproval = isAdminOrApprover
+    ? await prisma.attendanceCorrection.findMany({
+        where: { tenantId, status: "PENDING" },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+        include: { user: true },
+      })
+    : [];
+
+  const pendingForApprovalUi = pendingForApproval.map((p) => ({
+    id: p.id,
+    userLabel: p.user.name ?? p.user.email,
+    dateLabel: new Intl.DateTimeFormat("ja-JP", {
+      timeZone: "Asia/Tokyo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      weekday: "short",
+    }).format(p.date),
+    reason: p.reason,
+  }));
 
   return (
     <main style={{ padding: 24, fontFamily: "system-ui" }}>
@@ -62,6 +143,16 @@ export default async function DashboardPage() {
         canClockOut={canClockOut}
       />
 
+      <History items={historyItems} />
+
+      <CorrectionsPanel
+        isAdminOrApprover={isAdminOrApprover}
+        pendingCount={myPendingCount}
+        pendingForApproval={pendingForApprovalUi}
+      />
+
+      <ClosePanel isAdmin={role === "ADMIN"} month={month} isClosed={isClosed} />
+
       <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
         <Link href="/">/ (root)</Link>
         <form
@@ -75,7 +166,7 @@ export default async function DashboardPage() {
       </div>
 
       <hr style={{ margin: "24px 0" }} />
-      <p>次: 打刻履歴 / 修正申請 / 日報あたりを足していく。</p>
+      <p>次: 締めロック（Close）をUI/ APIで触れるようにする。</p>
     </main>
   );
 }

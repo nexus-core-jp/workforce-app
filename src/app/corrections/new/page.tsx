@@ -1,0 +1,42 @@
+import Link from "next/link";
+import { redirect } from "next/navigation";
+
+import { auth } from "@/auth";
+import { startOfJstDay } from "@/lib/time";
+
+import { CorrectionForm } from "./CorrectionForm";
+
+function jstTodayYmd() {
+  const today = startOfJstDay(new Date());
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(today);
+}
+
+export default async function NewCorrectionPage(props: {
+  searchParams: Promise<{ date?: string }>;
+}) {
+  const session = await auth();
+  if (!session) redirect("/login");
+
+  const sp = await props.searchParams;
+  const date = sp.date ?? jstTodayYmd();
+
+  return (
+    <main style={{ padding: 24, fontFamily: "system-ui" }}>
+      <h1>打刻修正申請（新規）</h1>
+      <p style={{ opacity: 0.8 }}>
+        MVPとして「理由」だけ必須。時刻の入力UIは次で足す。
+      </p>
+
+      <CorrectionForm date={date} />
+
+      <div style={{ marginTop: 16 }}>
+        <Link href="/dashboard">← dashboard</Link>
+      </div>
+    </main>
+  );
+}
