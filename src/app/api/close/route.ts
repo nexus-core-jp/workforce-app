@@ -1,29 +1,19 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { auth } from "@/auth";
+import { jsonError, requireRole } from "@/lib/api";
+import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/db";
 import { toCloseMonth } from "@/lib/jst";
-
-function jsonError(message: string, status = 400) {
-  return NextResponse.json({ ok: false, error: message }, { status });
-}
 
 const schema = z.object({
   month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
 });
 
 export async function POST(req: Request) {
-  const session = await auth();
-  if (!session?.user) return jsonError("Unauthorized", 401);
-
-  const user = session.user as any;
-  const tenantId: string | undefined = user.tenantId;
-  const closedByUserId: string | undefined = user.id;
-  const role: string | undefined = user.role;
-
-  if (!tenantId || !closedByUserId) return jsonError("Invalid session", 401);
-  if (role !== "ADMIN") return jsonError("Forbidden", 403);
+  const result = await requireRole("ADMIN");
+  if (!result.ok) return result.response;
+  const { id: closedByUserId, tenantId } = result.user;
 
   const raw = await req.json().catch(() => ({}));
   const input = schema.safeParse(raw);
@@ -35,6 +25,15 @@ export async function POST(req: Request) {
     where: { tenantId_month_scope_departmentId: { tenantId, month, scope: "COMPANY", departmentId: "" } },
     create: { tenantId, month, scope: "COMPANY", departmentId: "", closedByUserId },
     update: {},
+  });
+
+  await writeAuditLog({
+    tenantId,
+    actorUserId: closedByUserId,
+    action: "MONTHLY_CLOSE",
+    entityType: "Close",
+    entityId: close.id,
+    afterJson: close,
   });
 
   return NextResponse.json({ ok: true, close });

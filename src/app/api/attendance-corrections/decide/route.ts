@@ -1,12 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { auth } from "@/auth";
+import { ERROR_MESSAGES } from "@/lib/constants";
+import { jsonError, requireRole } from "@/lib/api";
+import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/db";
-
-function jsonError(message: string, status = 400) {
-  return NextResponse.json({ ok: false, error: message }, { status });
-}
 
 const schema = z.object({
   id: z.string().min(1),
@@ -14,24 +12,17 @@ const schema = z.object({
 });
 
 export async function POST(req: Request) {
-  const session = await auth();
-  if (!session?.user) return jsonError("Unauthorized", 401);
-
-  const user = session.user as any;
-  const tenantId: string | undefined = user.tenantId;
-  const approverUserId: string | undefined = user.id;
-  const role: string | undefined = user.role;
-
-  if (!tenantId || !approverUserId) return jsonError("Invalid session", 401);
-  if (role !== "ADMIN" && role !== "APPROVER") return jsonError("Forbidden", 403);
+  const result = await requireRole("ADMIN", "APPROVER");
+  if (!result.ok) return result.response;
+  const { id: approverUserId, tenantId } = result.user;
 
   const raw = await req.json().catch(() => null);
   const input = schema.safeParse(raw);
-  if (!input.success) return jsonError(input.error.message);
+  if (!input.success) return jsonError(ERROR_MESSAGES.INVALID_INPUT);
 
   const correction = await prisma.attendanceCorrection.findUnique({ where: { id: input.data.id } });
-  if (!correction || correction.tenantId !== tenantId) return jsonError("Not found", 404);
-  if (correction.status !== "PENDING") return jsonError("Already decided", 409);
+  if (!correction || correction.tenantId !== tenantId) return jsonError(ERROR_MESSAGES.NOT_FOUND, 404);
+  if (correction.status !== "PENDING") return jsonError(ERROR_MESSAGES.ALREADY_DECIDED, 409);
 
   const updated = await prisma.attendanceCorrection.update({
     where: { id: correction.id },
@@ -42,6 +33,15 @@ export async function POST(req: Request) {
     },
   });
 
-  // MVP: not applying changes to TimeEntry yet. We'll do that in next iteration.
+  await writeAuditLog({
+    tenantId,
+    actorUserId: approverUserId,
+    action: `CORRECTION_${input.data.decision}`,
+    entityType: "AttendanceCorrection",
+    entityId: updated.id,
+    beforeJson: correction,
+    afterJson: updated,
+  });
+
   return NextResponse.json({ ok: true, correction: updated });
 }

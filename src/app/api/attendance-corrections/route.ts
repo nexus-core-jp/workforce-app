@@ -1,49 +1,41 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
-import { auth } from "@/auth";
+import { ERROR_MESSAGES, REASON_MAX_LENGTH } from "@/lib/constants";
+import { jsonError, requireAuth } from "@/lib/api";
+import { writeAuditLog } from "@/lib/audit";
 import { isMonthClosed } from "@/lib/close";
 import { prisma } from "@/lib/db";
 import { startOfJstDay } from "@/lib/time";
 
-function jsonError(message: string, status = 400) {
-  return NextResponse.json({ ok: false, error: message }, { status });
-}
-
 const schema = z.object({
-  // YYYY-MM-DD (JST)
   date: z.string().min(10),
   requestedClockInAt: z.string().datetime().optional().nullable(),
   requestedBreakStartAt: z.string().datetime().optional().nullable(),
   requestedBreakEndAt: z.string().datetime().optional().nullable(),
   requestedClockOutAt: z.string().datetime().optional().nullable(),
-  reason: z.string().min(1).max(500),
+  reason: z.string().min(1).max(REASON_MAX_LENGTH),
 });
 
 function parseJstDateOnly(dateStr: string): Date {
-  // Interpret YYYY-MM-DD as JST date-only.
   const [y, m, d] = dateStr.split("-").map((x) => Number(x));
   const approx = new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1, 0, 0, 0));
   return startOfJstDay(approx);
 }
 
 export async function POST(req: Request) {
-  const session = await auth();
-  if (!session?.user) return jsonError("Unauthorized", 401);
-
-  const user = session.user as any;
-  const tenantId: string | undefined = user.tenantId;
-  const userId: string | undefined = user.id;
-  if (!tenantId || !userId) return jsonError("Invalid session", 401);
+  const result = await requireAuth();
+  if (!result.ok) return result.response;
+  const { id: userId, tenantId } = result.user;
 
   const raw = await req.json().catch(() => null);
   const input = schema.safeParse(raw);
-  if (!input.success) return jsonError(input.error.message);
+  if (!input.success) return jsonError(ERROR_MESSAGES.INVALID_INPUT);
 
   const date = parseJstDateOnly(input.data.date);
 
   if (await isMonthClosed(tenantId, date)) {
-    return jsonError("This month is closed", 409);
+    return jsonError(ERROR_MESSAGES.MONTH_CLOSED, 409);
   }
 
   const created = await prisma.attendanceCorrection.create({
@@ -57,6 +49,15 @@ export async function POST(req: Request) {
       requestedClockOutAt: input.data.requestedClockOutAt ? new Date(input.data.requestedClockOutAt) : null,
       reason: input.data.reason,
     },
+  });
+
+  await writeAuditLog({
+    tenantId,
+    actorUserId: userId,
+    action: "CORRECTION_REQUEST",
+    entityType: "AttendanceCorrection",
+    entityId: created.id,
+    afterJson: created,
   });
 
   return NextResponse.json({ ok: true, correction: created });

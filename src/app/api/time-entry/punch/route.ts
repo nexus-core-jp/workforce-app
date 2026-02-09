@@ -1,41 +1,21 @@
 import { NextResponse } from "next/server";
 
-import { auth } from "@/auth";
+import { ERROR_MESSAGES, PUNCH_LABELS } from "@/lib/constants";
+import { jsonError, requireAuth } from "@/lib/api";
+import { writeAuditLog } from "@/lib/audit";
 import { isMonthClosed } from "@/lib/close";
 import { prisma } from "@/lib/db";
-import { diffMinutes, startOfJstDay } from "@/lib/time";
+import { startOfJstDay } from "@/lib/time";
+import { computeWorkMinutes } from "@/lib/work-time";
 
 type PunchAction = "CLOCK_IN" | "BREAK_START" | "BREAK_END" | "CLOCK_OUT";
 
-function jsonError(message: string, status = 400) {
-  return NextResponse.json({ ok: false, error: message }, { status });
-}
-
-function computeWorkMinutes(entry: {
-  clockInAt: Date | null;
-  clockOutAt: Date | null;
-  breakStartAt: Date | null;
-  breakEndAt: Date | null;
-}): number {
-  if (!entry.clockInAt || !entry.clockOutAt) return 0;
-  const total = diffMinutes(entry.clockInAt, entry.clockOutAt);
-  let breakMin = 0;
-  if (entry.breakStartAt && entry.breakEndAt) {
-    breakMin = Math.max(0, diffMinutes(entry.breakStartAt, entry.breakEndAt));
-  }
-  return Math.max(0, total - breakMin);
-}
-
 export async function POST(req: Request) {
-  const session = await auth();
-  if (!session?.user) return jsonError("Unauthorized", 401);
+  const result = await requireAuth();
+  if (!result.ok) return result.response;
+  const { id: userId, tenantId } = result.user;
 
-  const user = session.user as any;
-  const tenantId: string | undefined = user.tenantId;
-  const userId: string | undefined = user.id;
-  if (!tenantId || !userId) return jsonError("Invalid session", 401);
-
-  let body: any;
+  let body: Record<string, unknown>;
   try {
     body = await req.json();
   } catch {
@@ -43,16 +23,15 @@ export async function POST(req: Request) {
   }
 
   const action = body?.action as PunchAction | undefined;
-  if (!action) return jsonError("Missing action");
+  if (!action) return jsonError(ERROR_MESSAGES.MISSING_ACTION);
 
   const today = startOfJstDay(new Date());
   const now = new Date();
 
   if (await isMonthClosed(tenantId, today)) {
-    return jsonError("This month is closed", 409);
+    return jsonError(ERROR_MESSAGES.MONTH_CLOSED, 409);
   }
 
-  // Ensure today's TimeEntry exists (for the tenant/user/date triple)
   const entry = await prisma.timeEntry.upsert({
     where: { tenantId_userId_date: { tenantId, userId, date: today } },
     create: { tenantId, userId, date: today },
@@ -64,34 +43,31 @@ export async function POST(req: Request) {
     breakStartAt?: Date | null;
     breakEndAt?: Date | null;
     clockOutAt?: Date | null;
-    workMinutes?: number;
   } = {};
 
-  // Basic state machine
   if (action === "CLOCK_IN") {
-    if (entry.clockInAt) return jsonError("Already clocked in", 409);
+    if (entry.clockInAt) return jsonError(ERROR_MESSAGES.ALREADY_CLOCKED_IN, 409);
     next.clockInAt = now;
   }
 
   if (action === "BREAK_START") {
-    if (!entry.clockInAt) return jsonError("Not clocked in", 409);
-    if (entry.clockOutAt) return jsonError("Already clocked out", 409);
-    if (entry.breakStartAt && !entry.breakEndAt) return jsonError("Break already started", 409);
-    // allow multiple breaks later; for MVP we only support one.
-    if (entry.breakStartAt && entry.breakEndAt) return jsonError("Break already finished (MVP supports one break)", 409);
+    if (!entry.clockInAt) return jsonError(ERROR_MESSAGES.NOT_CLOCKED_IN, 409);
+    if (entry.clockOutAt) return jsonError(ERROR_MESSAGES.ALREADY_CLOCKED_OUT, 409);
+    if (entry.breakStartAt && !entry.breakEndAt) return jsonError(ERROR_MESSAGES.BREAK_ALREADY_STARTED, 409);
+    if (entry.breakStartAt && entry.breakEndAt) return jsonError(ERROR_MESSAGES.BREAK_ALREADY_FINISHED, 409);
     next.breakStartAt = now;
   }
 
   if (action === "BREAK_END") {
-    if (!entry.breakStartAt) return jsonError("Break not started", 409);
-    if (entry.breakEndAt) return jsonError("Break already ended", 409);
+    if (!entry.breakStartAt) return jsonError(ERROR_MESSAGES.BREAK_NOT_STARTED, 409);
+    if (entry.breakEndAt) return jsonError(ERROR_MESSAGES.BREAK_ALREADY_ENDED, 409);
     next.breakEndAt = now;
   }
 
   if (action === "CLOCK_OUT") {
-    if (!entry.clockInAt) return jsonError("Not clocked in", 409);
-    if (entry.clockOutAt) return jsonError("Already clocked out", 409);
-    if (entry.breakStartAt && !entry.breakEndAt) return jsonError("Break in progress", 409);
+    if (!entry.clockInAt) return jsonError(ERROR_MESSAGES.NOT_CLOCKED_IN, 409);
+    if (entry.clockOutAt) return jsonError(ERROR_MESSAGES.ALREADY_CLOCKED_OUT, 409);
+    if (entry.breakStartAt && !entry.breakEndAt) return jsonError(ERROR_MESSAGES.BREAK_IN_PROGRESS, 409);
     next.clockOutAt = now;
   }
 
@@ -108,5 +84,16 @@ export async function POST(req: Request) {
     },
   });
 
-  return NextResponse.json({ ok: true, entry: updated });
+  await writeAuditLog({
+    tenantId,
+    actorUserId: userId,
+    action: `PUNCH_${action}`,
+    entityType: "TimeEntry",
+    entityId: updated.id,
+    beforeJson: entry,
+    afterJson: updated,
+  });
+
+  const label = PUNCH_LABELS[action] ?? action;
+  return NextResponse.json({ ok: true, entry: updated, label });
 }
