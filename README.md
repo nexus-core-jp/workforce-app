@@ -224,6 +224,47 @@ GitHub Actions で以下を自動実行します:
 3. **Unit Tests** - Vitest によるテスト
 4. **Build** - Next.js ビルド検証
 
+## 本番デプロイ（Vercel + Neon）
+
+推奨構成: **Vercel**（アプリ）+ **Neon**（PostgreSQL）
+50人規模の勤怠管理なら無料枠で運用可能です。
+
+### 1. Neon でデータベースを作成
+
+1. [Neon Console](https://console.neon.tech) にログイン
+2. 新しいプロジェクトを作成（リージョン: `ap-northeast-1` 推奨）
+3. 接続文字列をコピー（`postgresql://...?sslmode=require` 形式）
+
+### 2. Vercel にデプロイ
+
+1. [Vercel](https://vercel.com) でこのリポジトリをインポート
+2. 環境変数を設定:
+
+| 変数 | 値 |
+|------|-----|
+| `DATABASE_URL` | Neon の接続文字列 |
+| `AUTH_SECRET` | `npx auth secret` で生成した値 |
+
+3. デプロイを実行（`postinstall` で Prisma クライアントが自動生成されます）
+
+### 3. データベースのセットアップ
+
+```bash
+# マイグレーション（ローカルから Neon に対して実行）
+DATABASE_URL="postgresql://...@neon.tech/neondb?sslmode=require" npx prisma migrate deploy
+
+# デモデータ投入（任意）
+DATABASE_URL="postgresql://...@neon.tech/neondb?sslmode=require" npx tsx prisma/seed.ts
+```
+
+### コスト目安
+
+| 規模 | Vercel | Neon | 月額合計 |
+|------|--------|------|----------|
+| 個人・検証 | Hobby（無料） | Free | **$0** |
+| ~50人 | Pro（$20） | Free | **$20** |
+| ~200人 | Pro（$20） | Launch（$19） | **$39** |
+
 ## ライセンス
 
 Private
