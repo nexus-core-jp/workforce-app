@@ -232,30 +232,87 @@ GitHub Actions で以下を自動実行します:
 ### 1. Neon でデータベースを作成
 
 1. [Neon Console](https://console.neon.tech) にログイン
-2. 新しいプロジェクトを作成（リージョン: `ap-northeast-1` 推奨）
-3. 接続文字列をコピー（`postgresql://...?sslmode=require` 形式）
+2. 新しいプロジェクトを作成（リージョン: `ap-southeast-1` など）
+3. ダッシュボードから接続文字列をコピー
 
-### 2. Vercel にデプロイ
+接続文字列の形式:
+
+```
+postgresql://neondb_owner:PASSWORD@ep-xxx-pooler.region.aws.neon.tech/neondb?sslmode=require
+```
+
+> **注意**: `channel_binding=require` が含まれている場合は削除してください。Prisma との互換性の問題があります。
+
+### 2. データベースのセットアップ
+
+セットアップスクリプトを使うと、マイグレーション + デモデータ投入が一発で完了します。
+
+```bash
+# ワンステップセットアップ
+./scripts/setup-neon.sh "postgresql://neondb_owner:PASSWORD@ep-xxx-pooler.region.aws.neon.tech/neondb?sslmode=require"
+```
+
+または手動で実行:
+
+```bash
+# 接続文字列を変数に設定
+export DATABASE_URL="postgresql://neondb_owner:PASSWORD@ep-xxx-pooler.region.aws.neon.tech/neondb?sslmode=require"
+
+# Prisma クライアント生成
+npx prisma generate
+
+# マイグレーション実行（テーブル作成）
+npx prisma migrate deploy
+
+# デモデータ投入（任意）
+npx tsx prisma/seed.ts
+```
+
+完了後のデモアカウント:
+
+| 会社ID | メール | パスワード | 権限 |
+|--------|--------|-----------|------|
+| demo | admin@demo.local | password123 | 管理者 |
+
+### 3. Vercel にデプロイ
 
 1. [Vercel](https://vercel.com) でこのリポジトリをインポート
 2. 環境変数を設定:
 
-| 変数 | 値 |
-|------|-----|
-| `DATABASE_URL` | Neon の接続文字列 |
-| `AUTH_SECRET` | `npx auth secret` で生成した値 |
+| 変数 | 値 | 説明 |
+|------|-----|------|
+| `DATABASE_URL` | Neon の接続文字列 | ステップ1でコピーしたもの |
+| `AUTH_SECRET` | ランダム文字列 | `npx auth secret` で生成 |
 
-3. デプロイを実行（`postinstall` で Prisma クライアントが自動生成されます）
+3. デプロイを実行
+   - `postinstall` で Prisma クライアントが自動生成されます
+   - 本番環境では Neon の WebSocket アダプターで接続します（サーバーレス対応）
 
-### 3. データベースのセットアップ
+### 4. デプロイ後の確認
 
 ```bash
-# マイグレーション（ローカルから Neon に対して実行）
-DATABASE_URL="postgresql://...@neon.tech/neondb?sslmode=require" npx prisma migrate deploy
+# ヘルスチェック
+curl https://your-app.vercel.app/api/health
 
-# デモデータ投入（任意）
-DATABASE_URL="postgresql://...@neon.tech/neondb?sslmode=require" npx tsx prisma/seed.ts
+# 期待されるレスポンス
+# {"status":"ok","timestamp":"...","database":"connected"}
 ```
+
+### アーキテクチャ
+
+```
+[ブラウザ] ──→ [Vercel Edge Network]
+                    │
+            [Next.js App (サーバーレス関数)]
+                    │
+            [Neon WebSocket Adapter]
+                    │
+            [Neon PostgreSQL (サーバーレス)]
+```
+
+- **Vercel**: アクセスがないときはサーバーレス関数がスリープ → コスト0
+- **Neon**: アクセスがないときは DB がスケールダウン → コスト最小化
+- 勤怠アプリは朝・夕方のピーク以外はほぼアイドル → 無料枠で十分
 
 ### コスト目安
 
