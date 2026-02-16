@@ -1,36 +1,86 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Workforce App
 
-## Getting Started
+マルチテナント対応の勤怠管理システム。
 
-First, run the development server:
+## 技術スタック
+
+- **Next.js 16** (App Router / Server Components)
+- **TypeScript 5** (strict mode)
+- **Prisma 6** + PostgreSQL
+- **next-auth 5** (JWT / Credentials)
+- **Zod 4** (バリデーション)
+- **Vitest** (テスト)
+
+## セットアップ
 
 ```bash
+npm install
+cp .env.example .env   # DATABASE_URL, AUTH_SECRET, AUTH_URL を設定
+npx prisma generate
+npx prisma migrate dev
+npm run db:seed
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## デモアカウント (seed後)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| ロール | メール | パスワード |
+|--------|--------|------------|
+| ADMIN | admin@demo.local | password123 |
+| EMPLOYEE | employee@demo.local | password123 |
+| APPROVER | approver@demo.local | password123 |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Tenant slug: `demo`
 
-## Learn More
+## npm スクリプト
 
-To learn more about Next.js, take a look at the following resources:
+| コマンド | 内容 |
+|----------|------|
+| `npm run dev` | 開発サーバー |
+| `npm run build` | プロダクションビルド |
+| `npm start` | プロダクション起動 |
+| `npm test` | テスト実行 |
+| `npm run typecheck` | 型チェック |
+| `npm run lint` | ESLint |
+| `npm run db:seed` | デモデータ投入 |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 主要機能
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- 打刻 (出勤 / 休憩 / 退勤)
+- 直近7日の勤怠履歴
+- 打刻修正申請 (時刻指定 + 理由)
+- 修正承認/却下 (自己承認防止付き)
+- 月次締め (ADMIN のみ)
+- ユーザー管理 (ADMIN)
+- パスワード変更
+- 監査ログ
 
-## Deploy on Vercel
+## デプロイ
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Vercel (推奨)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. リポジトリを Vercel に接続
+2. 環境変数を設定 (`DATABASE_URL`, `AUTH_SECRET`)
+3. デプロイ
+
+### Docker
+
+```bash
+docker build -t workforce-app .
+docker run -p 3000:3000 \
+  -e DATABASE_URL="postgresql://..." \
+  -e AUTH_SECRET="..." \
+  workforce-app
+```
+
+## API エンドポイント
+
+| メソッド | パス | 内容 |
+|----------|------|------|
+| POST | `/api/time-entry/punch` | 打刻 |
+| POST | `/api/attendance-corrections` | 修正申請 |
+| POST | `/api/attendance-corrections/decide` | 承認/却下 |
+| POST | `/api/close` | 月次締め |
+| GET/POST | `/api/users` | ユーザー一覧/作成 |
+| POST | `/api/users/change-password` | パスワード変更 |
+| GET | `/api/health` | ヘルスチェック |
