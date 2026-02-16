@@ -17,10 +17,7 @@ export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user) return jsonError("Unauthorized", 401);
 
-  const user = session.user as any;
-  const tenantId: string | undefined = user.tenantId;
-  const closedByUserId: string | undefined = user.id;
-  const role: string | undefined = user.role;
+  const { id: closedByUserId, tenantId, role } = session.user;
 
   if (!tenantId || !closedByUserId) return jsonError("Invalid session", 401);
   if (role !== "ADMIN") return jsonError("Forbidden", 403);

@@ -32,8 +32,8 @@ export function TimeClock(props: {
       try {
         await punch(action);
         router.refresh();
-      } catch (e: any) {
-        setError(e?.message ?? "Failed");
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : "Failed");
       }
     });
   };

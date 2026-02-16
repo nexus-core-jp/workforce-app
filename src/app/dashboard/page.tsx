@@ -14,11 +14,7 @@ export default async function DashboardPage() {
   const session = await auth();
   if (!session) redirect("/login");
 
-  const user = session.user as any;
-
-  const tenantId: string = user.tenantId;
-  const userId: string = user.id;
-  const role: string = user.role;
+  const { id: userId, tenantId, role, name, email } = session.user;
 
   const today = startOfJstDay(new Date());
   const entry = await prisma.timeEntry.findUnique({
@@ -79,7 +75,7 @@ export default async function DashboardPage() {
     };
   });
 
-  // Corrections (MVP)
+  // Corrections
   const myPendingCount = await prisma.attendanceCorrection.count({
     where: { tenantId, userId, status: "PENDING" },
   });
@@ -116,12 +112,12 @@ export default async function DashboardPage() {
     <main style={{ padding: 24, fontFamily: "system-ui" }}>
       <h1 style={{ marginBottom: 8 }}>Dashboard</h1>
       <p style={{ marginTop: 0, opacity: 0.8 }}>
-        tenant: <b>{user.tenantId}</b> / role: <b>{user.role}</b>
+        tenant: <b>{tenantId}</b> / role: <b>{role}</b>
       </p>
 
       <div style={{ marginTop: 16 }}>
         <p>
-          ログイン中: <b>{user.name ?? user.email}</b>
+          ログイン中: <b>{name ?? email}</b>
         </p>
       </div>
 
@@ -164,9 +160,6 @@ export default async function DashboardPage() {
           <button type="submit">ログアウト</button>
         </form>
       </div>
-
-      <hr style={{ margin: "24px 0" }} />
-      <p>次: 締めロック（Close）をUI/ APIで触れるようにする。</p>
     </main>
   );
 }

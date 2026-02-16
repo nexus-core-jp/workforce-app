@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import { signIn } from "next-auth/react";
+import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
-  const [tenant, setTenant] = useState("demo");
+  const router = useRouter();
+  const [tenant, setTenant] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -26,10 +28,13 @@ export default function LoginPage() {
               tenant,
               email,
               password,
-              redirect: true,
-              callbackUrl: "/",
+              redirect: false,
             });
-            if (res?.error) setError("ログインに失敗しました");
+            if (res?.error) {
+              setError("ログインに失敗しました");
+            } else {
+              router.push("/dashboard");
+            }
           } catch {
             setError("ログインに失敗しました");
           } finally {

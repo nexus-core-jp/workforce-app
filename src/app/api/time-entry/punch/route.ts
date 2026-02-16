@@ -30,16 +30,14 @@ export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user) return jsonError("Unauthorized", 401);
 
-  const user = session.user as any;
-  const tenantId: string | undefined = user.tenantId;
-  const userId: string | undefined = user.id;
+  const { id: userId, tenantId } = session.user;
   if (!tenantId || !userId) return jsonError("Invalid session", 401);
 
-  let body: any;
+  let body: Record<string, unknown> = {};
   try {
     body = await req.json();
   } catch {
-    body = {};
+    // empty body
   }
 
   const action = body?.action as PunchAction | undefined;

@@ -22,8 +22,8 @@ export function CorrectionForm({ date }: { date: string }) {
         if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
         router.push("/dashboard");
         router.refresh();
-      } catch (e: any) {
-        setError(e?.message ?? "Failed");
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : "Failed");
       }
     });
   };
