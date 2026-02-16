@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { auth } from "@/auth";
+import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/db";
 import { toCloseMonth } from "@/lib/jst";
 
@@ -32,6 +33,15 @@ export async function POST(req: Request) {
     where: { tenantId_month_scope_departmentId: { tenantId, month, scope: "COMPANY", departmentId: "" } },
     create: { tenantId, month, scope: "COMPANY", departmentId: "", closedByUserId },
     update: {},
+  });
+
+  await writeAuditLog({
+    tenantId,
+    actorUserId: closedByUserId,
+    action: "MONTH_CLOSED",
+    entityType: "Close",
+    entityId: close.id,
+    after: { month, scope: "COMPANY" },
   });
 
   return NextResponse.json({ ok: true, close });

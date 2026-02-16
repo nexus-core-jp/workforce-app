@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { auth } from "@/auth";
+import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/db";
 
 function jsonError(message: string, status = 400) {
@@ -30,6 +31,11 @@ export async function POST(req: Request) {
   if (!correction || correction.tenantId !== tenantId) return jsonError("Not found", 404);
   if (correction.status !== "PENDING") return jsonError("Already decided", 409);
 
+  // Prevent self-approval
+  if (correction.userId === approverUserId) {
+    return jsonError("Cannot approve your own correction request", 403);
+  }
+
   const updated = await prisma.attendanceCorrection.update({
     where: { id: correction.id },
     data: {
@@ -39,6 +45,31 @@ export async function POST(req: Request) {
     },
   });
 
-  // MVP: not applying changes to TimeEntry yet. We'll do that in next iteration.
+  // Apply approved corrections to TimeEntry
+  if (input.data.decision === "APPROVED") {
+    const updateData: Record<string, Date | null> = {};
+    if (correction.requestedClockInAt) updateData.clockInAt = correction.requestedClockInAt;
+    if (correction.requestedClockOutAt) updateData.clockOutAt = correction.requestedClockOutAt;
+    if (correction.requestedBreakStartAt) updateData.breakStartAt = correction.requestedBreakStartAt;
+    if (correction.requestedBreakEndAt) updateData.breakEndAt = correction.requestedBreakEndAt;
+
+    if (Object.keys(updateData).length > 0) {
+      await prisma.timeEntry.updateMany({
+        where: { tenantId, userId: correction.userId, date: correction.date },
+        data: updateData,
+      });
+    }
+  }
+
+  await writeAuditLog({
+    tenantId,
+    actorUserId: approverUserId,
+    action: `CORRECTION_${input.data.decision}`,
+    entityType: "AttendanceCorrection",
+    entityId: correction.id,
+    before: { status: correction.status },
+    after: { status: input.data.decision, approverUserId },
+  });
+
   return NextResponse.json({ ok: true, correction: updated });
 }
