@@ -149,8 +149,9 @@ export default async function DashboardPage() {
 
       <ClosePanel isAdmin={role === "ADMIN"} month={month} isClosed={isClosed} />
 
-      <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
-        <Link href="/">/ (root)</Link>
+      <nav style={{ display: "flex", gap: 12, marginTop: 24, flexWrap: "wrap" }}>
+        <Link href="/settings">設定</Link>
+        {role === "ADMIN" && <Link href="/admin/users">ユーザー管理</Link>}
         <form
           action={async () => {
             "use server";
@@ -159,7 +160,7 @@ export default async function DashboardPage() {
         >
           <button type="submit">ログアウト</button>
         </form>
-      </div>
+      </nav>
     </main>
   );
 }

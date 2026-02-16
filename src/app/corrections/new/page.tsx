@@ -29,7 +29,7 @@ export default async function NewCorrectionPage(props: {
     <main style={{ padding: 24, fontFamily: "system-ui" }}>
       <h1>打刻修正申請（新規）</h1>
       <p style={{ opacity: 0.8 }}>
-        MVPとして「理由」だけ必須。時刻の入力UIは次で足す。
+        希望時刻と理由を入力して申請してください。
       </p>
 
       <CorrectionForm date={date} />
