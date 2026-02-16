@@ -150,6 +150,7 @@ export default async function DashboardPage() {
       <ClosePanel isAdmin={role === "ADMIN"} month={month} isClosed={isClosed} />
 
       <nav style={{ display: "flex", gap: 12, marginTop: 24, flexWrap: "wrap" }}>
+        <Link href="/leave">休暇申請</Link>
         <Link href="/settings">設定</Link>
         {role === "ADMIN" && <Link href="/admin/users">ユーザー管理</Link>}
         <form
