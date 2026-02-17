@@ -150,9 +150,14 @@ export default async function DashboardPage() {
       <ClosePanel isAdmin={role === "ADMIN"} month={month} isClosed={isClosed} />
 
       <nav style={{ display: "flex", gap: 12, marginTop: 24, flexWrap: "wrap" }}>
+        <Link href="/daily-reports">日報</Link>
         <Link href="/leave">休暇申請</Link>
+        <Link href="/leave/balance">休暇残高</Link>
         <Link href="/settings">設定</Link>
         {role === "ADMIN" && <Link href="/admin/users">ユーザー管理</Link>}
+        {role === "ADMIN" && <Link href="/admin/departments">部署管理</Link>}
+        {role === "ADMIN" && <Link href="/admin/shifts">シフト管理</Link>}
+        {role === "ADMIN" && <Link href="/admin/audit-logs">監査ログ</Link>}
         <form
           action={async () => {
             "use server";
