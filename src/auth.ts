@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import type { UserRole } from "@/generated/prisma";
 import { prisma } from "@/lib/db";
+import { LineProvider } from "@/lib/line-provider";
 
 const signInSchema = z.object({
   tenant: z.string().min(1),
@@ -49,17 +50,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         };
       },
     }),
+    // LINE Login — active only when LINE_CLIENT_ID / LINE_CLIENT_SECRET are set
+    ...(process.env.LINE_CLIENT_ID ? [LineProvider()] : []),
   ],
   pages: {
     signIn: "/login",
   },
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, account }) {
       if (user) {
         token.sub = user.id;
         token.tenantId = user.tenantId;
         token.role = user.role;
         token.departmentId = user.departmentId;
+      }
+      if (account?.provider === "line" && account.access_token) {
+        token.lineAccessToken = account.access_token;
       }
       return token;
     },
