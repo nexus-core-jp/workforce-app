@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { auth, signOut } from "@/auth";
@@ -5,8 +6,6 @@ import { prisma } from "@/lib/db";
 import { toSessionUser } from "@/lib/session";
 import { addJstDays, formatLocal, startOfJstDay } from "@/lib/time";
 
-import { ClosePanel } from "./ClosePanel";
-import { CorrectionsPanel } from "./CorrectionsPanel";
 import { DailyReportPanel } from "./DailyReportPanel";
 import { History } from "./History";
 import { TimeClock } from "./TimeClock";
@@ -79,16 +78,12 @@ export default async function DashboardPage() {
     };
   });
 
-  // Corrections (MVP)
+  // My pending correction count
   const myPendingCount = await prisma.attendanceCorrection.count({
     where: { tenantId, userId, status: "PENDING" },
   });
 
   const isAdminOrApprover = role === "ADMIN" || role === "APPROVER";
-
-  const month = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit" }).format(today);
-  const companyClose = await prisma.close.findUnique({ where: { tenantId_month_scope_departmentId: { tenantId, month, scope: "COMPANY", departmentId: "" } } });
-  const isClosed = !!companyClose;
 
   // Today's daily report
   const todayYmd = new Intl.DateTimeFormat("en-CA", {
@@ -102,28 +97,6 @@ export default async function DashboardPage() {
   });
   const dailyReportStatus: "none" | "draft" | "submitted" =
     dailyReport?.status === "SUBMITTED" ? "submitted" : dailyReport ? "draft" : "none";
-
-  const pendingForApproval = isAdminOrApprover
-    ? await prisma.attendanceCorrection.findMany({
-        where: { tenantId, status: "PENDING" },
-        orderBy: { createdAt: "desc" },
-        take: 10,
-        include: { user: true },
-      })
-    : [];
-
-  const pendingForApprovalUi = pendingForApproval.map((p) => ({
-    id: p.id,
-    userLabel: p.user.name ?? p.user.email,
-    dateLabel: new Intl.DateTimeFormat("ja-JP", {
-      timeZone: "Asia/Tokyo",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      weekday: "short",
-    }).format(p.date),
-    reason: p.reason,
-  }));
 
   const roleLabel = role === "ADMIN" ? "管理者" : role === "APPROVER" ? "承認者" : "従業員";
 
@@ -142,7 +115,7 @@ export default async function DashboardPage() {
               await signOut({ redirectTo: "/login" });
             }}
           >
-            <button type="submit" style={{ fontSize: 13, padding: "4px 12px" }}>
+            <button type="submit" style={{ fontSize: 13, padding: "4px 12px", minHeight: "auto" }}>
               ログアウト
             </button>
           </form>
@@ -150,6 +123,15 @@ export default async function DashboardPage() {
       </header>
 
       <main className="page-container">
+        {/* Admin link */}
+        {isAdminOrApprover && (
+          <nav style={{ marginBottom: 8 }}>
+            <Link href="/admin" style={{ fontWeight: 500 }}>
+              管理画面 →
+            </Link>
+          </nav>
+        )}
+
         <section>
           <h2 style={{ marginBottom: 12 }}>今日の打刻</h2>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
@@ -187,13 +169,13 @@ export default async function DashboardPage() {
 
         <History items={historyItems} />
 
-        <CorrectionsPanel
-          isAdminOrApprover={isAdminOrApprover}
-          pendingCount={myPendingCount}
-          pendingForApproval={pendingForApprovalUi}
-        />
-
-        <ClosePanel isAdmin={role === "ADMIN"} month={month} isClosed={isClosed} />
+        {/* Own correction status */}
+        <section>
+          <h2 style={{ marginBottom: 12 }}>打刻修正申請</h2>
+          <p style={{ fontSize: 14 }}>
+            あなたの未処理申請: <span className="badge badge-pending">{myPendingCount} 件</span>
+          </p>
+        </section>
       </main>
     </>
   );
