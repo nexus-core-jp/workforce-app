@@ -4,6 +4,7 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { isMonthClosed } from "@/lib/close";
 import { prisma } from "@/lib/db";
+import { toSessionUser } from "@/lib/session";
 import { startOfJstDay } from "@/lib/time";
 
 function jsonError(message: string, status = 400) {
@@ -31,10 +32,10 @@ export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user) return jsonError("Unauthorized", 401);
 
-  const user = session.user as any;
-  const tenantId: string | undefined = user.tenantId;
-  const userId: string | undefined = user.id;
-  if (!tenantId || !userId) return jsonError("Invalid session", 401);
+  const user = toSessionUser(session.user as Record<string, unknown>);
+  if (!user) return jsonError("Invalid session", 401);
+
+  const { tenantId, id: userId } = user;
 
   const raw = await req.json().catch(() => null);
   const input = schema.safeParse(raw);

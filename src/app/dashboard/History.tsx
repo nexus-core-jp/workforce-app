@@ -14,12 +14,12 @@ export function History(props: {
   }>;
 }) {
   return (
-    <section style={{ marginTop: 16 }}>
-      <h2 style={{ marginBottom: 8 }}>直近7日</h2>
+    <section>
+      <h2 style={{ marginBottom: 12 }}>直近7日</h2>
       <div style={{ overflowX: "auto" }}>
-        <table cellPadding={8} style={{ borderCollapse: "collapse", minWidth: 820 }}>
+        <table>
           <thead>
-            <tr style={{ textAlign: "left", borderBottom: "1px solid #ddd" }}>
+            <tr>
               <th>日付</th>
               <th>出勤</th>
               <th>休憩開始</th>
@@ -31,8 +31,8 @@ export function History(props: {
           </thead>
           <tbody>
             {props.items.map((it) => (
-              <tr key={it.dateYmd} style={{ borderBottom: "1px solid #f0f0f0" }}>
-                <td>{it.dateLabel}</td>
+              <tr key={it.dateYmd}>
+                <td style={{ fontWeight: 500 }}>{it.dateLabel}</td>
                 <td>{formatLocal(it.clockInAt)}</td>
                 <td>{formatLocal(it.breakStartAt)}</td>
                 <td>{formatLocal(it.breakEndAt)}</td>

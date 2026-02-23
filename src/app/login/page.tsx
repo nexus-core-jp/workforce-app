@@ -11,53 +11,85 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   return (
-    <main style={{ maxWidth: 420, margin: "40px auto", padding: 16 }}>
-      <h1 style={{ fontSize: 20, fontWeight: 700 }}>Workforce</h1>
-      <p style={{ marginTop: 8, color: "#666" }}>ログイン</p>
-
-      <form
-        style={{ display: "grid", gap: 12, marginTop: 16 }}
-        onSubmit={async (e) => {
-          e.preventDefault();
-          setError(null);
-          setLoading(true);
-          try {
-            const res = await signIn("credentials", {
-              tenant,
-              email,
-              password,
-              redirect: true,
-              callbackUrl: "/",
-            });
-            if (res?.error) setError("ログインに失敗しました");
-          } catch {
-            setError("ログインに失敗しました");
-          } finally {
-            setLoading(false);
-          }
+    <main
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: 400,
+          padding: 32,
+          background: "var(--color-surface)",
+          border: "1px solid var(--color-border)",
+          borderRadius: "var(--radius)",
+          boxShadow: "var(--shadow-md)",
         }}
       >
-        <label style={{ display: "grid", gap: 6 }}>
-          <span>会社ID（tenant）</span>
-          <input value={tenant} onChange={(e) => setTenant(e.target.value)} required />
-        </label>
+        <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 4 }}>Workforce</h1>
+        <p style={{ color: "var(--color-text-secondary)", fontSize: 14, marginBottom: 24 }}>
+          勤怠管理システムにログイン
+        </p>
 
-        <label style={{ display: "grid", gap: 6 }}>
-          <span>メール</span>
-          <input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required />
-        </label>
+        <form
+          style={{ display: "grid", gap: 16 }}
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setError(null);
+            setLoading(true);
+            try {
+              await signIn("credentials", {
+                tenant,
+                email,
+                password,
+                redirect: true,
+                callbackUrl: "/",
+              });
+            } catch {
+              setError("ログインに失敗しました");
+            } finally {
+              setLoading(false);
+            }
+          }}
+        >
+          <label style={{ display: "grid", gap: 6 }}>
+            <span>会社ID</span>
+            <input value={tenant} onChange={(e) => setTenant(e.target.value)} required />
+          </label>
 
-        <label style={{ display: "grid", gap: 6 }}>
-          <span>パスワード</span>
-          <input value={password} onChange={(e) => setPassword(e.target.value)} type="password" required />
-        </label>
+          <label style={{ display: "grid", gap: 6 }}>
+            <span>メールアドレス</span>
+            <input
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              type="email"
+              required
+              autoComplete="email"
+            />
+          </label>
 
-        <button type="submit" disabled={loading}>
-          {loading ? "処理中…" : "ログイン"}
-        </button>
+          <label style={{ display: "grid", gap: 6 }}>
+            <span>パスワード</span>
+            <input
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              type="password"
+              required
+              autoComplete="current-password"
+            />
+          </label>
 
-        {error ? <p style={{ color: "crimson" }}>{error}</p> : null}
-      </form>
+          <button type="submit" data-variant="primary" disabled={loading} style={{ marginTop: 8 }}>
+            {loading ? "ログイン中..." : "ログイン"}
+          </button>
+
+          {error ? <p className="error-text">{error}</p> : null}
+        </form>
+      </div>
     </main>
   );
 }

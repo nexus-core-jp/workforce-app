@@ -22,24 +22,30 @@ export function ClosePanel(props: { isAdmin: boolean; month: string; isClosed: b
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
         router.refresh();
-      } catch (e: any) {
-        setError(e?.message ?? "Failed");
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : "Failed");
       }
     });
   };
 
   return (
-    <section style={{ marginTop: 16 }}>
-      <h2 style={{ marginBottom: 8 }}>締め（管理者）</h2>
-      <p style={{ margin: 0 }}>
-        対象月: <b>{props.month}</b> / 状態: <b>{props.isClosed ? "締め済み" : "未締め"}</b>
-      </p>
-      <div style={{ marginTop: 8 }}>
-        <button disabled={props.isClosed || isPending} onClick={close}>
-          今月を締める
-        </button>
+    <section>
+      <h2 style={{ marginBottom: 12 }}>月次締め（管理者）</h2>
+      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+        <div>
+          <span style={{ fontSize: 14, color: "var(--color-text-secondary)" }}>対象月: </span>
+          <span style={{ fontWeight: 600 }}>{props.month}</span>
+        </div>
+        <span className={`badge ${props.isClosed ? "badge-closed" : "badge-open"}`}>
+          {props.isClosed ? "締め済み" : "未締め"}
+        </span>
+        {!props.isClosed && (
+          <button data-variant="primary" disabled={isPending} onClick={close}>
+            今月を締める
+          </button>
+        )}
       </div>
-      {error ? <p style={{ color: "crimson" }}>エラー: {error}</p> : null}
+      {error ? <p className="error-text">エラー: {error}</p> : null}
     </section>
   );
 }

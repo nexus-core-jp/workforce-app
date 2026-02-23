@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { auth, signOut } from "@/auth";
 import { prisma } from "@/lib/db";
+import { toSessionUser } from "@/lib/session";
 import { addJstDays, formatLocal, startOfJstDay } from "@/lib/time";
 
 import { ClosePanel } from "./ClosePanel";
@@ -12,13 +12,12 @@ import { TimeClock } from "./TimeClock";
 
 export default async function DashboardPage() {
   const session = await auth();
-  if (!session) redirect("/login");
+  if (!session?.user) redirect("/login");
 
-  const user = session.user as any;
+  const user = toSessionUser(session.user as Record<string, unknown>);
+  if (!user) redirect("/login");
 
-  const tenantId: string = user.tenantId;
-  const userId: string = user.id;
-  const role: string = user.role;
+  const { tenantId, id: userId, role } = user;
 
   const today = startOfJstDay(new Date());
   const entry = await prisma.timeEntry.findUnique({
@@ -112,61 +111,74 @@ export default async function DashboardPage() {
     reason: p.reason,
   }));
 
+  const roleLabel = role === "ADMIN" ? "管理者" : role === "APPROVER" ? "承認者" : "従業員";
+
   return (
-    <main style={{ padding: 24, fontFamily: "system-ui" }}>
-      <h1 style={{ marginBottom: 8 }}>Dashboard</h1>
-      <p style={{ marginTop: 0, opacity: 0.8 }}>
-        tenant: <b>{user.tenantId}</b> / role: <b>{user.role}</b>
-      </p>
+    <>
+      <header className="app-header">
+        <h1>Workforce</h1>
+        <div className="user-info">
+          <span>{user.name ?? user.email}</span>
+          <span className={`badge ${role === "ADMIN" ? "badge-closed" : role === "APPROVER" ? "badge-pending" : "badge-open"}`}>
+            {roleLabel}
+          </span>
+          <form
+            action={async () => {
+              "use server";
+              await signOut({ redirectTo: "/login" });
+            }}
+          >
+            <button type="submit" style={{ fontSize: 13, padding: "4px 12px" }}>
+              ログアウト
+            </button>
+          </form>
+        </div>
+      </header>
 
-      <div style={{ marginTop: 16 }}>
-        <p>
-          ログイン中: <b>{user.name ?? user.email}</b>
-        </p>
-      </div>
+      <main className="page-container">
+        <section>
+          <h2 style={{ marginBottom: 12 }}>今日の打刻</h2>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
+            <div>
+              <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>出勤</div>
+              <div style={{ fontSize: 16, fontWeight: 600 }}>{formatLocal(clockInAt)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>休憩開始</div>
+              <div style={{ fontSize: 16, fontWeight: 600 }}>{formatLocal(breakStartAt)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>休憩終了</div>
+              <div style={{ fontSize: 16, fontWeight: 600 }}>{formatLocal(breakEndAt)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>退勤</div>
+              <div style={{ fontSize: 16, fontWeight: 600 }}>{formatLocal(clockOutAt)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>労働時間</div>
+              <div style={{ fontSize: 16, fontWeight: 600 }}>{entry?.workMinutes ?? 0} 分</div>
+            </div>
+          </div>
+        </section>
 
-      <section style={{ marginTop: 16 }}>
-        <h2 style={{ marginBottom: 8 }}>今日の打刻</h2>
-        <ul style={{ margin: 0, paddingLeft: 18 }}>
-          <li>出勤: {formatLocal(clockInAt)}</li>
-          <li>休憩開始: {formatLocal(breakStartAt)}</li>
-          <li>休憩終了: {formatLocal(breakEndAt)}</li>
-          <li>退勤: {formatLocal(clockOutAt)}</li>
-          <li>労働分（概算）: {entry?.workMinutes ?? 0} 分</li>
-        </ul>
-      </section>
+        <TimeClock
+          canClockIn={canClockIn}
+          canBreakStart={canBreakStart}
+          canBreakEnd={canBreakEnd}
+          canClockOut={canClockOut}
+        />
 
-      <TimeClock
-        canClockIn={canClockIn}
-        canBreakStart={canBreakStart}
-        canBreakEnd={canBreakEnd}
-        canClockOut={canClockOut}
-      />
+        <History items={historyItems} />
 
-      <History items={historyItems} />
+        <CorrectionsPanel
+          isAdminOrApprover={isAdminOrApprover}
+          pendingCount={myPendingCount}
+          pendingForApproval={pendingForApprovalUi}
+        />
 
-      <CorrectionsPanel
-        isAdminOrApprover={isAdminOrApprover}
-        pendingCount={myPendingCount}
-        pendingForApproval={pendingForApprovalUi}
-      />
-
-      <ClosePanel isAdmin={role === "ADMIN"} month={month} isClosed={isClosed} />
-
-      <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
-        <Link href="/">/ (root)</Link>
-        <form
-          action={async () => {
-            "use server";
-            await signOut({ redirectTo: "/login" });
-          }}
-        >
-          <button type="submit">ログアウト</button>
-        </form>
-      </div>
-
-      <hr style={{ margin: "24px 0" }} />
-      <p>次: 締めロック（Close）をUI/ APIで触れるようにする。</p>
-    </main>
+        <ClosePanel isAdmin={role === "ADMIN"} month={month} isClosed={isClosed} />
+      </main>
+    </>
   );
 }

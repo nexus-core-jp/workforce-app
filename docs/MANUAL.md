@@ -23,7 +23,7 @@ npm i
 ```env
 DATABASE_URL="postgresql://...neon.../neondb?sslmode=require"
 AUTH_SECRET="(32bytes以上のランダム)"
-AUTH_URL="http://localhost:3000"
+AUTH_URL="http://localhost:3002"
 ```
 
 ## 2. DBマイグレーション / seed
@@ -44,7 +44,7 @@ seed後、デモログインが作られます：
 npm run dev
 ```
 
-- http://localhost:3000/login
+- http://localhost:3002/login
 
 ## 4. 画面の使い方（MVP）
 
@@ -86,11 +86,11 @@ npm run dev
 ## 7. 打刻修正申請（MVP）
 ### 申請（従業員）
 - `/corrections/new?date=YYYY-MM-DD`
-- MVPでは「理由」だけ必須（時刻入力UIは後で拡張）
+- 修正したい時刻（出勤・退勤・休憩開始・休憩終了）と理由を入力して申請
 
 ### 承認（ADMIN/APPROVER）
 - `/dashboard` に「打刻修正申請（承認）」が表示され、未処理を承認/却下できます
-- MVPでは **承認しても TimeEntry へ反映はまだしません**（次の実装で対応）
+- 承認すると申請された時刻が TimeEntry に自動反映されます
 
 ## 8. 締め（Close）
 ### 締め操作（ADMIN）

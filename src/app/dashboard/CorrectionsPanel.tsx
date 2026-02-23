@@ -24,47 +24,68 @@ export function CorrectionsPanel(props: {
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
         router.refresh();
-      } catch (e: any) {
-        setError(e?.message ?? "Failed");
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : "Failed");
       }
     });
   };
 
   if (!props.isAdminOrApprover) {
     return (
-      <section style={{ marginTop: 16 }}>
-        <h2 style={{ marginBottom: 8 }}>打刻修正申請</h2>
-        <p style={{ margin: 0 }}>あなたの未処理申請: {props.pendingCount} 件</p>
+      <section>
+        <h2 style={{ marginBottom: 12 }}>打刻修正申請</h2>
+        <p style={{ fontSize: 14 }}>
+          あなたの未処理申請: <span className="badge badge-pending">{props.pendingCount} 件</span>
+        </p>
       </section>
     );
   }
 
   return (
-    <section style={{ marginTop: 16 }}>
-      <h2 style={{ marginBottom: 8 }}>打刻修正申請（承認）</h2>
+    <section>
+      <h2 style={{ marginBottom: 12 }}>打刻修正申請（承認）</h2>
       {props.pendingForApproval.length === 0 ? (
-        <p style={{ margin: 0 }}>未処理なし</p>
+        <p style={{ fontSize: 14, color: "var(--color-text-secondary)" }}>未処理の申請はありません</p>
       ) : (
-        <ul style={{ margin: 0, paddingLeft: 18 }}>
+        <div style={{ display: "grid", gap: 12 }}>
           {props.pendingForApproval.map((p) => (
-            <li key={p.id} style={{ marginBottom: 8 }}>
-              <div>
-                <b>{p.dateLabel}</b> / {p.userLabel}
+            <div
+              key={p.id}
+              style={{
+                padding: 12,
+                border: "1px solid var(--color-border)",
+                borderRadius: "var(--radius)",
+                background: "var(--color-bg)",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                <div>
+                  <div style={{ fontWeight: 600 }}>{p.dateLabel}</div>
+                  <div style={{ fontSize: 14, color: "var(--color-text-secondary)" }}>{p.userLabel}</div>
+                  <div style={{ fontSize: 14, marginTop: 4 }}>理由: {p.reason}</div>
+                </div>
+                <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                  <button
+                    data-variant="success"
+                    disabled={isPending}
+                    onClick={() => decide(p.id, "APPROVED")}
+                  >
+                    承認
+                  </button>
+                  <button
+                    data-variant="danger"
+                    disabled={isPending}
+                    onClick={() => decide(p.id, "REJECTED")}
+                  >
+                    却下
+                  </button>
+                </div>
               </div>
-              <div style={{ opacity: 0.8 }}>理由: {p.reason}</div>
-              <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-                <button disabled={isPending} onClick={() => decide(p.id, "APPROVED")}>
-                  承認
-                </button>
-                <button disabled={isPending} onClick={() => decide(p.id, "REJECTED")}>
-                  却下
-                </button>
-              </div>
-            </li>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
-      {error ? <p style={{ color: "crimson" }}>エラー: {error}</p> : null}
+      {error ? <p className="error-text">エラー: {error}</p> : null}
     </section>
   );
 }

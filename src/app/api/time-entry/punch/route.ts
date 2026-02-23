@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { isMonthClosed } from "@/lib/close";
 import { prisma } from "@/lib/db";
+import { toSessionUser } from "@/lib/session";
 import { diffMinutes, startOfJstDay } from "@/lib/time";
 
 type PunchAction = "CLOCK_IN" | "BREAK_START" | "BREAK_END" | "CLOCK_OUT";
@@ -30,12 +31,12 @@ export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user) return jsonError("Unauthorized", 401);
 
-  const user = session.user as any;
-  const tenantId: string | undefined = user.tenantId;
-  const userId: string | undefined = user.id;
-  if (!tenantId || !userId) return jsonError("Invalid session", 401);
+  const user = toSessionUser(session.user as Record<string, unknown>);
+  if (!user) return jsonError("Invalid session", 401);
 
-  let body: any;
+  const { tenantId, id: userId } = user;
+
+  let body: Record<string, unknown>;
   try {
     body = await req.json();
   } catch {

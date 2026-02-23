@@ -39,8 +39,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const ok = await bcrypt.compare(password, user.passwordHash);
         if (!ok) return null;
 
-        // next-auth expects a plain object with an id.
-        // We'll stash app-specific fields into the JWT via callbacks.
+        // Return user data; custom fields are forwarded via jwt/session callbacks.
         return {
           id: user.id,
           email: user.email,
@@ -48,7 +47,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           tenantId: user.tenantId,
           role: user.role,
           departmentId: user.departmentId,
-        } as any;
+        };
       },
     }),
   ],
@@ -59,19 +58,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async jwt({ token, user }) {
       // On initial sign-in, `user` is set (from Credentials.authorize).
       if (user) {
-        token.sub = (user as any).id;
-        (token as any).tenantId = (user as any).tenantId;
-        (token as any).role = (user as any).role;
-        (token as any).departmentId = (user as any).departmentId;
+        const u = user as Record<string, unknown>;
+        token.sub = u.id as string;
+        token.tenantId = u.tenantId as string;
+        token.role = u.role as string;
+        token.departmentId = (u.departmentId as string) ?? null;
       }
       return token;
     },
     async session({ session, token }) {
       // expose claims to the client
-      (session.user as any).id = token.sub;
-      (session.user as any).tenantId = (token as any).tenantId;
-      (session.user as any).role = (token as any).role;
-      (session.user as any).departmentId = (token as any).departmentId;
+      const u = session.user as unknown as Record<string, unknown>;
+      u.id = token.sub;
+      u.tenantId = token.tenantId;
+      u.role = token.role;
+      u.departmentId = token.departmentId;
       return session;
     },
   },

@@ -32,17 +32,21 @@ export function TimeClock(props: {
       try {
         await punch(action);
         router.refresh();
-      } catch (e: any) {
-        setError(e?.message ?? "Failed");
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : "Failed");
       }
     });
   };
 
   return (
-    <section style={{ marginTop: 16 }}>
-      <h2 style={{ marginBottom: 8 }}>打刻</h2>
+    <section>
+      <h2 style={{ marginBottom: 12 }}>打刻</h2>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button disabled={!props.canClockIn || isPending} onClick={() => run("CLOCK_IN")}>
+        <button
+          data-variant="primary"
+          disabled={!props.canClockIn || isPending}
+          onClick={() => run("CLOCK_IN")}
+        >
           出勤
         </button>
         <button
@@ -51,18 +55,21 @@ export function TimeClock(props: {
         >
           休憩開始
         </button>
-        <button disabled={!props.canBreakEnd || isPending} onClick={() => run("BREAK_END")}>
+        <button
+          disabled={!props.canBreakEnd || isPending}
+          onClick={() => run("BREAK_END")}
+        >
           休憩終了
         </button>
-        <button disabled={!props.canClockOut || isPending} onClick={() => run("CLOCK_OUT")}>
+        <button
+          data-variant="danger"
+          disabled={!props.canClockOut || isPending}
+          onClick={() => run("CLOCK_OUT")}
+        >
           退勤
         </button>
       </div>
-      {error ? (
-        <p style={{ color: "crimson", marginTop: 8 }}>
-          エラー: {error}
-        </p>
-      ) : null}
+      {error ? <p className="error-text">エラー: {error}</p> : null}
     </section>
   );
 }

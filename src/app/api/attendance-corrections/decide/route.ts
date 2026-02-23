@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { Prisma } from "@/generated/prisma";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
+import { toSessionUser } from "@/lib/session";
+import { diffMinutes } from "@/lib/time";
 
 function jsonError(message: string, status = 400) {
   return NextResponse.json({ ok: false, error: message }, { status });
@@ -17,12 +20,11 @@ export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user) return jsonError("Unauthorized", 401);
 
-  const user = session.user as any;
-  const tenantId: string | undefined = user.tenantId;
-  const approverUserId: string | undefined = user.id;
-  const role: string | undefined = user.role;
+  const user = toSessionUser(session.user as Record<string, unknown>);
+  if (!user) return jsonError("Invalid session", 401);
 
-  if (!tenantId || !approverUserId) return jsonError("Invalid session", 401);
+  const { tenantId, id: approverUserId, role } = user;
+
   if (role !== "ADMIN" && role !== "APPROVER") return jsonError("Forbidden", 403);
 
   const raw = await req.json().catch(() => null);
@@ -42,6 +44,87 @@ export async function POST(req: Request) {
     },
   });
 
-  // MVP: not applying changes to TimeEntry yet. We'll do that in next iteration.
+  // When approved, apply the requested times to the TimeEntry
+  if (input.data.decision === "APPROVED") {
+    const entry = await prisma.timeEntry.findUnique({
+      where: {
+        tenantId_userId_date: {
+          tenantId: correction.tenantId,
+          userId: correction.userId,
+          date: correction.date,
+        },
+      },
+    });
+
+    if (entry) {
+      const beforeSnapshot = {
+        clockInAt: entry.clockInAt,
+        clockOutAt: entry.clockOutAt,
+        breakStartAt: entry.breakStartAt,
+        breakEndAt: entry.breakEndAt,
+        workMinutes: entry.workMinutes,
+      };
+
+      const newClockInAt = correction.requestedClockInAt ?? entry.clockInAt;
+      const newClockOutAt = correction.requestedClockOutAt ?? entry.clockOutAt;
+      const newBreakStartAt = correction.requestedBreakStartAt ?? entry.breakStartAt;
+      const newBreakEndAt = correction.requestedBreakEndAt ?? entry.breakEndAt;
+
+      let workMinutes = 0;
+      if (newClockInAt && newClockOutAt) {
+        const total = diffMinutes(newClockInAt, newClockOutAt);
+        let breakMin = 0;
+        if (newBreakStartAt && newBreakEndAt) {
+          breakMin = Math.max(0, diffMinutes(newBreakStartAt, newBreakEndAt));
+        }
+        workMinutes = Math.max(0, total - breakMin);
+      }
+
+      const updatedEntry = await prisma.timeEntry.update({
+        where: { id: entry.id },
+        data: {
+          clockInAt: newClockInAt,
+          clockOutAt: newClockOutAt,
+          breakStartAt: newBreakStartAt,
+          breakEndAt: newBreakEndAt,
+          workMinutes,
+        },
+      });
+
+      // Audit log
+      await prisma.auditLog.create({
+        data: {
+          tenantId,
+          actorUserId: approverUserId,
+          action: "CORRECTION_APPROVED",
+          entityType: "TimeEntry",
+          entityId: entry.id,
+          beforeJson: beforeSnapshot,
+          afterJson: {
+            clockInAt: updatedEntry.clockInAt,
+            clockOutAt: updatedEntry.clockOutAt,
+            breakStartAt: updatedEntry.breakStartAt,
+            breakEndAt: updatedEntry.breakEndAt,
+            workMinutes: updatedEntry.workMinutes,
+            correctionId: correction.id,
+          },
+        },
+      });
+    }
+  } else {
+    // Audit log for rejection
+    await prisma.auditLog.create({
+      data: {
+        tenantId,
+        actorUserId: approverUserId,
+        action: "CORRECTION_REJECTED",
+        entityType: "AttendanceCorrection",
+        entityId: correction.id,
+        beforeJson: Prisma.JsonNull,
+        afterJson: { reason: correction.reason, decision: "REJECTED" },
+      },
+    });
+  }
+
   return NextResponse.json({ ok: true, correction: updated });
 }
