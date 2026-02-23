@@ -9,6 +9,7 @@ import { startOfJstDay } from "@/lib/time";
 import { ClosePanel } from "../dashboard/ClosePanel";
 import { AdminCorrections } from "./AdminCorrections";
 import { AdminDailyReports } from "./AdminDailyReports";
+import { ExportPanel } from "./ExportPanel";
 
 export default async function AdminPage() {
   const session = await auth();
@@ -23,6 +24,12 @@ export default async function AdminPage() {
   if (role !== "ADMIN" && role !== "APPROVER") {
     redirect("/dashboard");
   }
+
+  // Fetch tenant for trial info
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { plan: true, trialEndsAt: true },
+  });
 
   const today = startOfJstDay(new Date());
   const month = new Intl.DateTimeFormat("en-CA", {
@@ -126,17 +133,39 @@ export default async function AdminPage() {
               await signOut({ redirectTo: "/login" });
             }}
           >
-            <button type="submit" style={{ fontSize: 13, padding: "4px 12px", minHeight: "auto" }}>
+            <button type="submit" className="btn-compact">
               ログアウト
             </button>
           </form>
         </div>
       </header>
 
+      {/* Trial banner */}
+      {tenant?.plan === "TRIAL" && (() => {
+        const trialDays = tenant.trialEndsAt
+          ? Math.ceil((tenant.trialEndsAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+          : null;
+        if (trialDays !== null && trialDays <= 0) {
+          return (
+            <div className="trial-banner trial-banner-expired">
+              トライアル期間が終了しました
+            </div>
+          );
+        }
+        return (
+          <div className={`trial-banner ${trialDays !== null && trialDays <= 7 ? "trial-banner-warning" : ""}`}>
+            トライアル残り {trialDays} 日
+          </div>
+        );
+      })()}
+
       <main className="page-container">
         {/* Navigation */}
-        <nav style={{ display: "flex", gap: 12, marginBottom: 8 }}>
+        <nav style={{ display: "flex", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
           <Link href="/dashboard">← マイページ</Link>
+          {role === "ADMIN" && <Link href="/admin/members">メンバー管理</Link>}
+          {role === "ADMIN" && <Link href="/admin/billing">プラン・請求</Link>}
+          {role === "ADMIN" && <Link href="/admin/audit-logs">監査ログ</Link>}
         </nav>
 
         {/* Overview cards */}
@@ -168,6 +197,9 @@ export default async function AdminPage() {
         {role === "ADMIN" && (
           <ClosePanel isAdmin={true} month={month} isClosed={!!companyClose} />
         )}
+
+        {/* CSV Export */}
+        <ExportPanel defaultMonth={month} />
 
         {/* Correction approvals */}
         <AdminCorrections items={pendingCorrectionsUi} />

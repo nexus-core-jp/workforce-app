@@ -16,7 +16,7 @@ export function History(props: {
   return (
     <section>
       <h2 style={{ marginBottom: 12 }}>直近7日</h2>
-      <div style={{ overflowX: "auto" }}>
+      <div className="table-scroll">
         <table>
           <thead>
             <tr>

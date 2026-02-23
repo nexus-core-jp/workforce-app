@@ -2,12 +2,13 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const router = useRouter();
-  const [tenant, setTenant] = useState("demo");
+  const [companyName, setCompanyName] = useState("");
+  const [slug, setSlug] = useState("");
+  const [adminName, setAdminName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +36,7 @@ export default function LoginPage() {
       >
         <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 4 }}>Workforce</h1>
         <p style={{ color: "var(--color-text-secondary)", fontSize: 14, marginBottom: 24 }}>
-          勤怠管理システムにログイン
+          新規会社登録
         </p>
 
         <form
@@ -45,28 +46,59 @@ export default function LoginPage() {
             setError(null);
             setLoading(true);
             try {
-              const res = await signIn("credentials", {
-                tenant,
-                email,
-                password,
-                redirect: false,
+              const res = await fetch("/api/register", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ companyName, slug, adminName, email, password }),
               });
-              if (res?.error) {
-                setError("会社ID、メールアドレス、またはパスワードが正しくありません");
+              const data = await res.json();
+              if (!res.ok) {
+                setError(data.error ?? "登録に失敗しました");
               } else {
-                router.push("/dashboard");
-                router.refresh();
+                router.push("/login");
               }
             } catch {
-              setError("ログインに失敗しました");
+              setError("登録に失敗しました");
             } finally {
               setLoading(false);
             }
           }}
         >
           <label style={{ display: "grid", gap: 6 }}>
-            <span>会社ID</span>
-            <input value={tenant} onChange={(e) => setTenant(e.target.value)} required autoComplete="organization" />
+            <span>会社名</span>
+            <input
+              value={companyName}
+              onChange={(e) => setCompanyName(e.target.value)}
+              required
+              placeholder="例: 株式会社サンプル"
+              autoComplete="organization"
+            />
+          </label>
+
+          <label style={{ display: "grid", gap: 6 }}>
+            <span>会社ID（ログイン時に使用）</span>
+            <input
+              value={slug}
+              onChange={(e) => setSlug(e.target.value.toLowerCase())}
+              required
+              pattern="^[a-z0-9_-]+$"
+              placeholder="例: sample-corp"
+              autoComplete="off"
+            />
+            <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
+              半角英数字・ハイフン・アンダースコアのみ
+            </span>
+          </label>
+
+          <label style={{ display: "grid", gap: 6 }}>
+            <span>管理者名</span>
+            <input
+              value={adminName}
+              onChange={(e) => setAdminName(e.target.value)}
+              required
+              placeholder="例: 山田太郎"
+              autoComplete="name"
+            />
           </label>
 
           <label style={{ display: "grid", gap: 6 }}>
@@ -87,22 +119,23 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               type="password"
               required
-              autoComplete="current-password"
+              minLength={8}
+              autoComplete="new-password"
             />
+            <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
+              8文字以上
+            </span>
           </label>
 
           <button type="submit" data-variant="primary" disabled={loading} style={{ marginTop: 8 }}>
-            {loading ? "ログイン中..." : "ログイン"}
+            {loading ? "登録中..." : "会社を登録"}
           </button>
 
           {error ? <p className="error-text">{error}</p> : null}
         </form>
 
-        <p style={{ marginTop: 12, fontSize: 14, textAlign: "center" }}>
-          <Link href="/forgot-password">パスワードをお忘れですか？</Link>
-        </p>
-        <p style={{ marginTop: 8, fontSize: 14, textAlign: "center" }}>
-          <Link href="/register">新規会社登録はこちら</Link>
+        <p style={{ marginTop: 20, fontSize: 14, textAlign: "center" }}>
+          <Link href="/login">ログインはこちら</Link>
         </p>
       </div>
     </main>

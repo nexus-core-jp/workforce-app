@@ -19,6 +19,14 @@ export default async function DashboardPage() {
 
   const { tenantId, id: userId, role } = user;
 
+  if (role === "SUPER_ADMIN") redirect("/super-admin");
+
+  // Fetch tenant for trial info
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { plan: true, trialEndsAt: true },
+  });
+
   const today = startOfJstDay(new Date());
   const entry = await prisma.timeEntry.findUnique({
     where: { tenantId_userId_date: { tenantId, userId, date: today } },
@@ -115,12 +123,31 @@ export default async function DashboardPage() {
               await signOut({ redirectTo: "/login" });
             }}
           >
-            <button type="submit" style={{ fontSize: 13, padding: "4px 12px", minHeight: "auto" }}>
+            <button type="submit" className="btn-compact">
               ログアウト
             </button>
           </form>
         </div>
       </header>
+
+      {/* Trial banner */}
+      {tenant?.plan === "TRIAL" && (() => {
+        const trialDays = tenant.trialEndsAt
+          ? Math.ceil((tenant.trialEndsAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+          : null;
+        if (trialDays !== null && trialDays <= 0) {
+          return (
+            <div className="trial-banner trial-banner-expired">
+              トライアル期間が終了しました
+            </div>
+          );
+        }
+        return (
+          <div className={`trial-banner ${trialDays !== null && trialDays <= 7 ? "trial-banner-warning" : ""}`}>
+            トライアル残り {trialDays} 日
+          </div>
+        );
+      })()}
 
       <main className="page-container">
         {/* Admin link */}

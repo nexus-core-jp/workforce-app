@@ -135,6 +135,47 @@ button[data-variant="success"] {
   border-color: var(--color-success);
 }
 
+/* Compact button — smaller visually but keeps 44px tap target */
+button.btn-compact {
+  font-size: 13px;
+  padding: 6px 12px;
+  min-height: 36px;
+  position: relative;
+}
+
+button.btn-compact::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  min-width: 100%;
+  min-height: 44px;
+  width: 100%;
+}
+
+/* Compact select — smaller visually but keeps 44px tap area */
+select.select-compact {
+  width: auto;
+  font-size: 13px;
+  padding: 6px 8px;
+  min-height: 36px;
+}
+
+/* Table action links — ensure tappable area */
+.table-action-link {
+  display: inline-block;
+  padding: 8px 4px;
+  min-height: 44px;
+  line-height: 28px;
+}
+
+/* Table scroll container for LINE in-app browser */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 /* Form elements — touch-friendly */
 input,
 textarea,
@@ -242,6 +283,42 @@ tbody tr:hover {
 .badge-open {
   background: #d1fae5;
   color: #065f46;
+}
+
+/* Trial banner */
+.trial-banner {
+  text-align: center;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.trial-banner-warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.trial-banner-expired {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* Plan badges */
+.badge-trial {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.badge-active {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.badge-suspended {
+  background: #fee2e2;
+  color: #991b1b;
 }
 
 /* Header / Nav */
@@ -373,8 +450,8 @@ tbody tr:hover {
     border-radius: 0;
   }
 
-  /* Full-width buttons on small screens */
-  button {
+  /* Full-width buttons on small screens — exclude compact buttons in tables */
+  button:not(.btn-compact) {
     width: 100%;
   }
 
@@ -421,5 +498,35 @@ tbody tr:hover {
   .badge-open {
     background: #064e3b;
     color: #d1fae5;
+  }
+
+  .badge-trial {
+    background: #1e3a5f;
+    color: #bfdbfe;
+  }
+
+  .badge-active {
+    background: #064e3b;
+    color: #d1fae5;
+  }
+
+  .badge-suspended {
+    background: #7f1d1d;
+    color: #fee2e2;
+  }
+
+  .trial-banner {
+    background: #1e3a5f;
+    color: #bfdbfe;
+  }
+
+  .trial-banner-warning {
+    background: #78350f;
+    color: #fef3c7;
+  }
+
+  .trial-banner-expired {
+    background: #7f1d1d;
+    color: #fee2e2;
   }
 }

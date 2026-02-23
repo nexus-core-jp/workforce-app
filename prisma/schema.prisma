@@ -40,6 +40,7 @@ model User {
   leaveRequestsApproved LeaveRequest[] @relation("LeaveRequestApprover")
   closesClosedBy Close[] @relation("CloseClosedBy")
   auditLogsAsActor AuditLog[] @relation("AuditLogActor")
+  passwordResetTokens PasswordResetToken[]
 
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -89,11 +90,15 @@ model VerificationToken {
 
 // --- Multi-tenant core ---
 model Tenant {
-  id        String   @id @default(cuid())
-  name      String
-  slug      String   @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String     @id @default(cuid())
+  name        String
+  slug        String     @unique
+  plan                  TenantPlan @default(TRIAL)
+  trialEndsAt           DateTime?
+  stripeCustomerId      String?    @unique
+  stripeSubscriptionId  String?
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
 
   users      User[]
   departments Department[]
@@ -106,6 +111,7 @@ model Tenant {
   closes Close[]
   auditLogs AuditLog[]
   attendanceCorrections AttendanceCorrection[]
+  passwordResetTokens PasswordResetToken[]
 
   @@index([name])
 }
@@ -330,10 +336,26 @@ model AuditLog {
   @@index([tenantId, createdAt])
 }
 
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  tenantId  String
+  userId    String
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
 enum UserRole {
   EMPLOYEE
   APPROVER
   ADMIN
+  SUPER_ADMIN
 }
 
 enum TimeEntryStatus {
@@ -375,4 +397,10 @@ enum LeaveLedgerKind {
 enum CloseScope {
   COMPANY
   DEPARTMENT
+}
+
+enum TenantPlan {
+  TRIAL
+  ACTIVE
+  SUSPENDED
 }
