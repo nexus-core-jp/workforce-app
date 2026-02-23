@@ -7,6 +7,7 @@ import { addJstDays, formatLocal, startOfJstDay } from "@/lib/time";
 
 import { ClosePanel } from "./ClosePanel";
 import { CorrectionsPanel } from "./CorrectionsPanel";
+import { DailyReportPanel } from "./DailyReportPanel";
 import { History } from "./History";
 import { TimeClock } from "./TimeClock";
 
@@ -89,6 +90,19 @@ export default async function DashboardPage() {
   const companyClose = await prisma.close.findUnique({ where: { tenantId_month_scope_departmentId: { tenantId, month, scope: "COMPANY", departmentId: "" } } });
   const isClosed = !!companyClose;
 
+  // Today's daily report
+  const todayYmd = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(today);
+  const dailyReport = await prisma.dailyReport.findUnique({
+    where: { tenantId_userId_date: { tenantId, userId, date: today } },
+  });
+  const dailyReportStatus: "none" | "draft" | "submitted" =
+    dailyReport?.status === "SUBMITTED" ? "submitted" : dailyReport ? "draft" : "none";
+
   const pendingForApproval = isAdminOrApprover
     ? await prisma.attendanceCorrection.findMany({
         where: { tenantId, status: "PENDING" },
@@ -168,6 +182,8 @@ export default async function DashboardPage() {
           canBreakEnd={canBreakEnd}
           canClockOut={canClockOut}
         />
+
+        <DailyReportPanel dateYmd={todayYmd} status={dailyReportStatus} />
 
         <History items={historyItems} />
 

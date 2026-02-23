@@ -1,0 +1,121 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+
+import { auth } from "@/auth";
+import { prisma } from "@/lib/db";
+import { toSessionUser } from "@/lib/session";
+import { startOfJstDay } from "@/lib/time";
+
+function jsonError(message: string, status = 400) {
+  return NextResponse.json({ ok: false, error: message }, { status });
+}
+
+const upsertSchema = z.object({
+  date: z.string().min(10),
+  route: z.string().max(200).optional().nullable(),
+  cases: z.number().int().min(0).optional().nullable(),
+  workHoursText: z.string().max(100).optional().nullable(),
+  incidentsText: z.string().max(1000).optional().nullable(),
+  notesText: z.string().max(1000).optional().nullable(),
+  announcementsText: z.string().max(1000).optional().nullable(),
+  submit: z.boolean().optional(),
+});
+
+function parseJstDateOnly(dateStr: string): Date {
+  const [y, m, d] = dateStr.split("-").map((x) => Number(x));
+  const approx = new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1, 0, 0, 0));
+  return startOfJstDay(approx);
+}
+
+/** POST: Create or update a daily report (save draft or submit) */
+export async function POST(req: Request) {
+  const session = await auth();
+  if (!session?.user) return jsonError("Unauthorized", 401);
+
+  const user = toSessionUser(session.user as Record<string, unknown>);
+  if (!user) return jsonError("Invalid session", 401);
+
+  const { tenantId, id: userId } = user;
+
+  const raw = await req.json().catch(() => null);
+  const input = upsertSchema.safeParse(raw);
+  if (!input.success) return jsonError(input.error.message);
+
+  const date = parseJstDateOnly(input.data.date);
+  const shouldSubmit = input.data.submit === true;
+
+  // Check if already submitted
+  const existing = await prisma.dailyReport.findUnique({
+    where: { tenantId_userId_date: { tenantId, userId, date } },
+  });
+  if (existing?.status === "SUBMITTED" && !shouldSubmit) {
+    return jsonError("既に提出済みです", 409);
+  }
+
+  const report = await prisma.dailyReport.upsert({
+    where: { tenantId_userId_date: { tenantId, userId, date } },
+    create: {
+      tenantId,
+      userId,
+      date,
+      route: input.data.route ?? null,
+      cases: input.data.cases ?? null,
+      workHoursText: input.data.workHoursText ?? null,
+      incidentsText: input.data.incidentsText ?? null,
+      notesText: input.data.notesText ?? null,
+      announcementsText: input.data.announcementsText ?? null,
+      status: shouldSubmit ? "SUBMITTED" : "DRAFT",
+      submittedAt: shouldSubmit ? new Date() : null,
+    },
+    update: {
+      route: input.data.route ?? null,
+      cases: input.data.cases ?? null,
+      workHoursText: input.data.workHoursText ?? null,
+      incidentsText: input.data.incidentsText ?? null,
+      notesText: input.data.notesText ?? null,
+      announcementsText: input.data.announcementsText ?? null,
+      ...(shouldSubmit
+        ? { status: "SUBMITTED", submittedAt: new Date() }
+        : {}),
+    },
+  });
+
+  return NextResponse.json({ ok: true, report });
+}
+
+/** GET: Fetch daily reports for the authenticated user */
+export async function GET(req: Request) {
+  const session = await auth();
+  if (!session?.user) return jsonError("Unauthorized", 401);
+
+  const user = toSessionUser(session.user as Record<string, unknown>);
+  if (!user) return jsonError("Invalid session", 401);
+
+  const { tenantId, id: userId, role } = user;
+
+  const url = new URL(req.url);
+  const dateParam = url.searchParams.get("date");
+
+  // Single report by date
+  if (dateParam) {
+    const date = parseJstDateOnly(dateParam);
+    const report = await prisma.dailyReport.findUnique({
+      where: { tenantId_userId_date: { tenantId, userId, date } },
+    });
+    return NextResponse.json({ ok: true, report: report ?? null });
+  }
+
+  // Admin/Approver can see all reports for the tenant
+  const isAdmin = role === "ADMIN" || role === "APPROVER";
+  const reports = await prisma.dailyReport.findMany({
+    where: {
+      tenantId,
+      ...(isAdmin ? {} : { userId }),
+    },
+    orderBy: { date: "desc" },
+    take: 30,
+    include: { user: { select: { name: true, email: true } } },
+  });
+
+  return NextResponse.json({ ok: true, reports });
+}
