@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 
 type PunchAction = "CLOCK_IN" | "BREAK_START" | "BREAK_END" | "CLOCK_OUT";
 
@@ -23,19 +23,20 @@ export function TimeClock(props: {
   canClockOut: boolean;
 }) {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const run = (action: PunchAction) => {
+  const run = async (action: PunchAction) => {
     setError(null);
-    startTransition(async () => {
-      try {
-        await punch(action);
-        router.refresh();
-      } catch (e: unknown) {
-        setError(e instanceof Error ? e.message : "Failed");
-      }
-    });
+    setLoading(true);
+    try {
+      await punch(action);
+      router.refresh();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "打刻に失敗しました");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -44,26 +45,26 @@ export function TimeClock(props: {
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <button
           data-variant="primary"
-          disabled={!props.canClockIn || isPending}
+          disabled={!props.canClockIn || loading}
           onClick={() => run("CLOCK_IN")}
         >
-          出勤
+          {loading ? "処理中..." : "出勤"}
         </button>
         <button
-          disabled={!props.canBreakStart || isPending}
+          disabled={!props.canBreakStart || loading}
           onClick={() => run("BREAK_START")}
         >
           休憩開始
         </button>
         <button
-          disabled={!props.canBreakEnd || isPending}
+          disabled={!props.canBreakEnd || loading}
           onClick={() => run("BREAK_END")}
         >
           休憩終了
         </button>
         <button
           data-variant="danger"
-          disabled={!props.canClockOut || isPending}
+          disabled={!props.canClockOut || loading}
           onClick={() => run("CLOCK_OUT")}
         >
           退勤
