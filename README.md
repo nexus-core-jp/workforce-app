@@ -30,15 +30,22 @@
 | **月次締め** | 管理者が当月の勤怠データをロックし編集を防止 |
 | **監査ログ** | 承認・却下・締め操作の履歴を自動記録 |
 | **マルチテナント** | テナント単位でデータを完全分離 |
+| **セルフ登録** | 会社が自分で登録 → 30日トライアル開始 |
+| **Stripe 課金** | Checkout / Webhook / Billing Portal による自動課金管理 |
+| **Super Admin** | 全テナントの KPI ダッシュボード・プラン変更・監査ログ閲覧 |
+| **パスワードリセット** | メール経由のセルフサービスリセット |
+| **アカウント停止** | SUSPENDED プランのテナントは自動的に機能ブロック |
+| **監査ログ** | 全操作（メンバー追加・権限変更・プラン変更等）を記録 + 閲覧 UI |
 | **PWA** | スマートフォンのホーム画面に追加してスタンドアロン起動 |
 
 ### ロール
 
-| ロール | 打刻 | 日報 | 修正申請 | 承認/却下 | CSVエクスポート | 月次締め |
-|--------|------|------|----------|----------|---------------|---------|
-| `EMPLOYEE` | o | o | o | x | x | x |
-| `APPROVER` | o | o | o | o | o | x |
-| `ADMIN` | o | o | o | o | o | o |
+| ロール | 打刻 | 日報 | 修正申請 | 承認/却下 | CSV | 月次締め | メンバー管理 | 課金管理 | 全テナント管理 |
+|--------|------|------|----------|----------|-----|---------|------------|----------|--------------|
+| `EMPLOYEE` | o | o | o | x | x | x | x | x | x |
+| `APPROVER` | o | o | o | o | o | x | x | x | x |
+| `ADMIN` | o | o | o | o | o | o | o | o | x |
+| `SUPER_ADMIN` | — | — | — | — | — | — | — | — | o |
 
 ---
 
@@ -59,45 +66,31 @@ PWA      :  Web App Manifest (standalone)
 
 ## Quick Start
 
-### 1. Clone & Install
+ターミナルで以下をコピー＆ペーストすれば、そのまま起動できます。
 
 ```bash
+# 1. クローン＆インストール
 git clone https://github.com/nexus-core-jp/workforce-app.git
 cd workforce-app
 npm install
-```
 
-### 2. 環境変数
-
-```bash
+# 2. 環境変数を設定（DATABASE_URL だけ書き換えてください）
 cp .env.example .env
-```
+sed -i '' "s|AUTH_SECRET=.*|AUTH_SECRET=\"$(openssl rand -base64 32)\"|" .env
+# ↑ AUTH_SECRET は自動生成されます
+# ↓ DATABASE_URL は .env を開いて自分の PostgreSQL 接続文字列に書き換えてください
+#   例: DATABASE_URL="postgresql://user:pass@localhost:5432/workforce_app"
 
-`.env` を編集して以下を設定:
+# 3. DB セットアップ＆デモデータ投入（一括実行）
+npx prisma generate && npx prisma migrate deploy && npm run db:seed
 
-```env
-DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DB?sslmode=require"
-AUTH_SECRET="<32文字以上のランダム文字列>"
-AUTH_URL="http://localhost:3002"
-```
-
-> `AUTH_SECRET` の生成: `openssl rand -base64 32`
-
-### 3. データベース準備
-
-```bash
-npm run prisma:generate   # Prisma クライアント生成
-npm run prisma:migrate    # マイグレーション実行
-npm run db:seed           # デモデータ投入
-```
-
-### 4. 起動
-
-```bash
+# 4. 起動！
 npm run dev
 ```
 
-**http://localhost:3002** でアクセスできます。
+**http://localhost:3002** を開いてログインしてください。
+
+> **補足:** Stripe 課金やメール送信は任意です。`.env` の `STRIPE_*` / `RESEND_*` を空のままにしておけばスキップされます。
 
 ---
 
@@ -108,12 +101,14 @@ npm run dev
 
 | ロール | 会社ID | メール | パスワード |
 |--------|--------|--------|-----------|
+| Super Admin | `__platform` | `super@platform.local` | `superadmin123` |
 | 管理者 (ADMIN) | `demo` | `admin@demo.local` | `password123` |
 | 従業員 (EMPLOYEE) | `demo` | `tanaka@demo.local` | `password123` |
 | 承認者 (APPROVER) | `demo` | `suzuki@demo.local` | `password123` |
 
-> 管理者でログインすると `/admin` から全機能を確認できます。
-> 従業員でログインすると打刻・日報・修正申請の従業員フローを確認できます。
+> **Super Admin** → `/super-admin` で全テナントの KPI・監査ログ・プラン管理。
+> **管理者** → `/admin` でメンバー管理・課金・監査ログ・CSV エクスポート。
+> **従業員** → `/dashboard` で打刻・日報・修正申請。
 
 ---
 

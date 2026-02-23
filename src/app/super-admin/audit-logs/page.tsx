@@ -6,6 +6,7 @@ import { auth, signOut } from "@/auth";
 import { prisma } from "@/lib/db";
 import { toSessionUser } from "@/lib/session";
 
+import { Logo } from "../../Logo";
 import { AuditLogFilters } from "./AuditLogFilters";
 
 const PAGE_SIZE = 20;
@@ -83,7 +84,7 @@ export default async function SaAuditLogsPage({ searchParams }: Props) {
   return (
     <>
       <header className="app-header">
-        <h1>Workforce — Super Admin</h1>
+        <h1><Logo sub="Super Admin" /></h1>
         <div className="user-info">
           <span>{user.name ?? user.email}</span>
           <span className="badge badge-closed">SA</span>

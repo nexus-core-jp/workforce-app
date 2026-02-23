@@ -5,6 +5,7 @@ import { auth, signOut } from "@/auth";
 import { prisma } from "@/lib/db";
 import { toSessionUser } from "@/lib/session";
 
+import { Logo } from "../../Logo";
 import { BillingActions } from "./BillingActions";
 
 const planLabel: Record<string, string> = {
@@ -36,7 +37,7 @@ export default async function BillingPage() {
   return (
     <>
       <header className="app-header">
-        <h1>Workforce</h1>
+        <h1><Logo /></h1>
         <div className="user-info">
           <span>{user.name ?? user.email}</span>
           <span className="badge badge-closed">管理者</span>

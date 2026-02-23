@@ -7,6 +7,7 @@ import { toSessionUser } from "@/lib/session";
 import { startOfJstDay } from "@/lib/time";
 
 import { ClosePanel } from "../dashboard/ClosePanel";
+import { Logo } from "../Logo";
 import { AdminCorrections } from "./AdminCorrections";
 import { AdminDailyReports } from "./AdminDailyReports";
 import { ExportPanel } from "./ExportPanel";
@@ -121,7 +122,7 @@ export default async function AdminPage() {
   return (
     <>
       <header className="app-header">
-        <h1>Workforce</h1>
+        <h1><Logo /></h1>
         <div className="user-info">
           <span>{user.name ?? user.email}</span>
           <span className={`badge ${role === "ADMIN" ? "badge-closed" : "badge-pending"}`}>

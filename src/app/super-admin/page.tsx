@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { toSessionUser } from "@/lib/session";
 import { startOfJstDay } from "@/lib/time";
 
+import { Logo } from "../Logo";
 import { KpiCards } from "./KpiCards";
 import { KpiCharts } from "./KpiCharts";
 
@@ -106,7 +107,7 @@ export default async function SuperAdminPage() {
   return (
     <>
       <header className="app-header">
-        <h1>Workforce — Super Admin</h1>
+        <h1><Logo sub="Super Admin" /></h1>
         <div className="user-info">
           <span>{user.name ?? user.email}</span>
           <span className="badge badge-closed">SA</span>

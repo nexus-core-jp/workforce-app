@@ -6,6 +6,7 @@ import { prisma } from "@/lib/db";
 import { toSessionUser } from "@/lib/session";
 import { addJstDays, formatLocal, startOfJstDay } from "@/lib/time";
 
+import { Logo } from "../Logo";
 import { DailyReportPanel } from "./DailyReportPanel";
 import { History } from "./History";
 import { TimeClock } from "./TimeClock";
@@ -111,7 +112,7 @@ export default async function DashboardPage() {
   return (
     <>
       <header className="app-header">
-        <h1>Workforce</h1>
+        <h1><Logo /></h1>
         <div className="user-info">
           <span>{user.name ?? user.email}</span>
           <span className={`badge ${role === "ADMIN" ? "badge-closed" : role === "APPROVER" ? "badge-pending" : "badge-open"}`}>

@@ -30,7 +30,7 @@ export default function ForgotPasswordPage() {
           boxShadow: "var(--shadow-md)",
         }}
       >
-        <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 4 }}>Workforce</h1>
+        <h1 style={{ fontSize: 24, marginBottom: 4 }}><span className="logo"><span className="logo-icon" style={{ width: 32, height: 32, fontSize: 16 }}>W</span><span className="logo-text">Workforce</span></span></h1>
         <p style={{ color: "var(--color-text-secondary)", fontSize: 14, marginBottom: 24 }}>
           パスワードをお忘れですか？
         </p>

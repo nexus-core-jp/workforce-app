@@ -340,6 +340,43 @@ tbody tr:hover {
   font-weight: 700;
 }
 
+/* Branded logo */
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.logo-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 900;
+  flex-shrink: 0;
+}
+
+.logo-text {
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.logo-sub {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  -webkit-text-fill-color: var(--color-text-secondary);
+}
+
 .app-header .user-info {
   display: flex;
   align-items: center;

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Logo } from "../../../Logo";
 
 type TenantPlan = "TRIAL" | "ACTIVE" | "SUSPENDED";
 type UserRole = "EMPLOYEE" | "APPROVER" | "ADMIN" | "SUPER_ADMIN";
@@ -84,7 +85,7 @@ export function TenantDetail({ tenant, users }: { tenant: TenantInfo; users: Use
   return (
     <>
       <header className="app-header">
-        <h1>Workforce — Super Admin</h1>
+        <h1><Logo sub="Super Admin" /></h1>
         <div className="user-info">
           <span className="badge badge-closed">SA</span>
         </div>
