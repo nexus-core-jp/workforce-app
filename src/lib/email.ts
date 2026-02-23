@@ -16,7 +16,7 @@ export async function sendPasswordResetEmail(
   const resend = new Resend(apiKey);
 
   await resend.emails.send({
-    from: "Workforce <noreply@workforce.app>",
+    from: "Workforce Nexus <noreply@workforce.app>",
     to: email,
     subject: "パスワードリセットのご案内",
     text: [
@@ -48,7 +48,7 @@ export async function sendRegistrationNotification(
   const resend = new Resend(apiKey);
 
   await resend.emails.send({
-    from: "Workforce <noreply@workforce.app>",
+    from: "Workforce Nexus <noreply@workforce.app>",
     to: notificationEmail,
     subject: `新規登録: ${tenantName} (${slug})`,
     text: [

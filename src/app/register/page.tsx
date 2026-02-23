@@ -34,7 +34,7 @@ export default function RegisterPage() {
           boxShadow: "var(--shadow-md)",
         }}
       >
-        <h1 style={{ fontSize: 24, marginBottom: 4 }}><span className="logo"><span className="logo-icon" style={{ width: 32, height: 32, fontSize: 16 }}>W</span><span className="logo-text">Workforce</span></span></h1>
+        <h1 style={{ fontSize: 24, marginBottom: 4 }}><span className="logo"><span className="logo-icon" style={{ width: 32, height: 32, fontSize: 13 }}>WN</span><span className="logo-text">Workforce Nexus</span></span></h1>
         <p style={{ color: "var(--color-text-secondary)", fontSize: 14, marginBottom: 24 }}>
           新規会社登録
         </p>

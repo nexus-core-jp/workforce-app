@@ -42,7 +42,7 @@ export default async function SuspendedPage() {
           textAlign: "center",
         }}
       >
-        <h1 style={{ fontSize: 24, marginBottom: 12 }}><span className="logo"><span className="logo-icon" style={{ width: 32, height: 32, fontSize: 16 }}>W</span><span className="logo-text">Workforce</span></span></h1>
+        <h1 style={{ fontSize: 24, marginBottom: 12 }}><span className="logo"><span className="logo-icon" style={{ width: 32, height: 32, fontSize: 13 }}>WN</span><span className="logo-text">Workforce Nexus</span></span></h1>
         <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 12 }}>アカウント停止中</h2>
         <p style={{ color: "var(--color-text-secondary)", marginBottom: 24 }}>
           お客様のアカウントは現在停止されています。

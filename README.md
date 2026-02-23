@@ -1,5 +1,5 @@
 <p align="center">
-  <h1 align="center">Workforce</h1>
+  <h1 align="center">Workforce Nexus</h1>
   <p align="center">マルチテナント対応 勤怠管理システム</p>
 </p>
 

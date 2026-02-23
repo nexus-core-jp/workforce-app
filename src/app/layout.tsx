@@ -2,13 +2,13 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Workforce - 勤怠管理",
+  title: "Workforce Nexus - 勤怠管理",
   description: "マルチテナント対応の勤怠管理システム",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Workforce",
+    title: "Workforce Nexus",
   },
 };
 

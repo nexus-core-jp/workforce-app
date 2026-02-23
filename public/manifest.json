@@ -1,6 +1,6 @@
 {
-  "name": "Workforce - 勤怠管理",
-  "short_name": "Workforce",
+  "name": "Workforce Nexus - 勤怠管理",
+  "short_name": "WF Nexus",
   "description": "マルチテナント対応の勤怠管理システム",
   "start_url": "/dashboard",
   "display": "standalone",
