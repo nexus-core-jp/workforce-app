@@ -1,6 +1,5 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import { PrismaAdapter } from "@auth/prisma-adapter";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 
@@ -13,8 +12,8 @@ const signInSchema = z.object({
 });
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  adapter: PrismaAdapter(prisma),
-  // Credentials provider requires JWT sessions (Auth.js limitation)
+  // PrismaAdapter is removed: Credentials provider + JWT sessions don't need
+  // a database adapter. We handle user lookup directly in authorize().
   session: { strategy: "jwt" },
   providers: [
     Credentials({

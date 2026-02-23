@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import { signIn } from "next-auth/react";
+import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [tenant, setTenant] = useState("demo");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -42,13 +44,18 @@ export default function LoginPage() {
             setError(null);
             setLoading(true);
             try {
-              await signIn("credentials", {
+              const res = await signIn("credentials", {
                 tenant,
                 email,
                 password,
-                redirect: true,
-                callbackUrl: "/",
+                redirect: false,
               });
+              if (res?.error) {
+                setError("会社ID、メールアドレス、またはパスワードが正しくありません");
+              } else {
+                router.push("/dashboard");
+                router.refresh();
+              }
             } catch {
               setError("ログインに失敗しました");
             } finally {
