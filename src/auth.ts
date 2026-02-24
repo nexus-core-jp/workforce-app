@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 
 import { prisma } from "@/lib/db";
+import { rateLimit } from "@/lib/rate-limit";
 
 const signInSchema = z.object({
   tenant: z.string().min(1), // tenant slug
@@ -26,6 +27,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       async authorize(raw) {
         const { tenant, email, password } = signInSchema.parse(raw);
 
+        // Rate limit: 10 attempts per tenant+email per 15 minutes
+        const { limited } = rateLimit(`login:${tenant}:${email}`, 10, 15 * 60 * 1000);
+        if (limited) return null;
+
         const dbTenant = await prisma.tenant.findUnique({ where: { slug: tenant } });
         if (!dbTenant) return null;
 
@@ -36,7 +41,31 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         if (!user.passwordHash) return null;
 
         const ok = await bcrypt.compare(password, user.passwordHash);
-        if (!ok) return null;
+        if (!ok) {
+          // Audit: login failed
+          prisma.auditLog.create({
+            data: {
+              tenantId: dbTenant.id,
+              actorUserId: user.id,
+              action: "LOGIN_FAILED",
+              entityType: "User",
+              entityId: user.id,
+              afterJson: { reason: "invalid_password" },
+            },
+          }).catch(() => {});
+          return null;
+        }
+
+        // Audit: login success
+        prisma.auditLog.create({
+          data: {
+            tenantId: dbTenant.id,
+            actorUserId: user.id,
+            action: "LOGIN_SUCCESS",
+            entityType: "User",
+            entityId: user.id,
+          },
+        }).catch(() => {});
 
         // Return user data; custom fields are forwarded via jwt/session callbacks.
         return {
@@ -65,6 +94,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.departmentId = (u.departmentId as string) ?? null;
         token.plan = u.plan as string;
       }
+
+      // Refresh plan from DB on every request to catch SA plan changes immediately
+      if (token.tenantId && token.role !== "SUPER_ADMIN") {
+        try {
+          const tenant = await prisma.tenant.findUnique({
+            where: { id: token.tenantId as string },
+            select: { plan: true },
+          });
+          if (tenant) {
+            token.plan = tenant.plan;
+          }
+        } catch {
+          // DB error — keep existing plan in token
+        }
+      }
+
       return token;
     },
     async session({ session, token }) {

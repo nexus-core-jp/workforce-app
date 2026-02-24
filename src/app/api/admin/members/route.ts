@@ -4,13 +4,14 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
+import { passwordSchema } from "@/lib/password";
 import { toSessionUser } from "@/lib/session";
 import { guardSuspended } from "@/lib/tenant-guard";
 
 const addSchema = z.object({
   name: z.string().min(1, "名前は必須です"),
   email: z.string().email("メールアドレスの形式が正しくありません"),
-  password: z.string().min(8, "パスワードは8文字以上必要です"),
+  password: passwordSchema,
   role: z.enum(["EMPLOYEE", "APPROVER", "ADMIN"]),
 });
 

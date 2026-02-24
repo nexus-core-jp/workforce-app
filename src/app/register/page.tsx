@@ -123,7 +123,7 @@ export default function RegisterPage() {
               autoComplete="new-password"
             />
             <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
-              8文字以上
+              8文字以上、大文字・小文字・数字を各1文字以上
             </span>
           </label>
 

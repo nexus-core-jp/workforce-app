@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { auth, signOut } from "@/auth";
+import { auth } from "@/auth";
+import { logoutWithAudit } from "@/lib/logout-action";
 import { prisma } from "@/lib/db";
 import { toSessionUser } from "@/lib/session";
 import { startOfJstDay } from "@/lib/time";
@@ -114,7 +115,7 @@ export default async function SuperAdminPage() {
           <form
             action={async () => {
               "use server";
-              await signOut({ redirectTo: "/login" });
+              await logoutWithAudit();
             }}
           >
             <button type="submit" className="btn-compact">

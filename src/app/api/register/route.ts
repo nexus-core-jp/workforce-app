@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { prisma } from "@/lib/db";
 import { sendRegistrationNotification } from "@/lib/email";
+import { passwordSchema } from "@/lib/password";
 
 const registerSchema = z.object({
   companyName: z.string().min(1, "会社名は必須です"),
@@ -14,7 +15,7 @@ const registerSchema = z.object({
     .regex(/^[a-z0-9_-]+$/, "会社IDは半角英数字・ハイフン・アンダースコアのみ使用できます"),
   adminName: z.string().min(1, "管理者名は必須です"),
   email: z.string().email("メールアドレスの形式が正しくありません"),
-  password: z.string().min(8, "パスワードは8文字以上必要です"),
+  password: passwordSchema,
 });
 
 export async function POST(request: Request) {
