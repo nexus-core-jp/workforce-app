@@ -133,8 +133,9 @@ export default async function DashboardPage() {
 
       {/* Trial banner */}
       {tenant?.plan === "TRIAL" && (() => {
+        const now = new Date();
         const trialDays = tenant.trialEndsAt
-          ? Math.ceil((tenant.trialEndsAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+          ? Math.ceil((tenant.trialEndsAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
           : null;
         if (trialDays !== null && trialDays <= 0) {
           return (

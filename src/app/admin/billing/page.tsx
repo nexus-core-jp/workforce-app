@@ -29,9 +29,10 @@ export default async function BillingPage() {
   });
   if (!tenant) redirect("/dashboard");
 
+  const now = new Date();
   const trialDays =
     tenant.plan === "TRIAL" && tenant.trialEndsAt
-      ? Math.ceil((tenant.trialEndsAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+      ? Math.ceil((tenant.trialEndsAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
       : null;
 
   return (
