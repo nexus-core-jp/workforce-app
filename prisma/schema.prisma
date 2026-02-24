@@ -117,6 +117,7 @@ model Tenant {
   passwordResetTokens PasswordResetToken[]
   payrollConfigs PayrollConfig[]
   monthlyPayrolls MonthlyPayroll[]
+  tenantHolidays TenantHoliday[]
 
   @@index([name])
 }
@@ -420,6 +421,22 @@ model MonthlyPayroll {
 
   @@unique([tenantId, userId, month])
   @@index([tenantId, month])
+}
+
+// --- Company custom holidays (会社休業日) ---
+model TenantHoliday {
+  id        String   @id @default(cuid())
+  tenantId  String
+  date      DateTime // date-only semantics (JST midnight)
+  name      String   // e.g. "年末休業", "創立記念日"
+  recurring Boolean  @default(false) // true = 毎年繰り返し (月日で判定)
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([tenantId, date])
+  @@index([tenantId])
 }
 
 model PasswordResetToken {

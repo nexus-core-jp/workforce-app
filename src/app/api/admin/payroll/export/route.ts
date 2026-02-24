@@ -35,16 +35,29 @@ export async function GET(req: Request) {
   const start = new Date(Date.UTC(year, mon - 1, 1) - JST_OFFSET_MS);
   const end = new Date(Date.UTC(year, mon, 1) - JST_OFFSET_MS);
 
-  // Get configs and entries
-  const configs = await prisma.payrollConfig.findMany({
-    where: { tenantId },
-    include: { user: { select: { id: true, name: true, email: true, active: true } } },
-  });
+  // Get configs, entries, and company holidays
+  const [configs, entries, tenantHolidays] = await Promise.all([
+    prisma.payrollConfig.findMany({
+      where: { tenantId },
+      include: { user: { select: { id: true, name: true, email: true, active: true } } },
+    }),
+    prisma.timeEntry.findMany({
+      where: { tenantId, date: { gte: start, lt: end } },
+      orderBy: { date: "asc" },
+    }),
+    prisma.tenantHoliday.findMany({ where: { tenantId } }),
+  ]);
 
-  const entries = await prisma.timeEntry.findMany({
-    where: { tenantId, date: { gte: start, lt: end } },
-    orderBy: { date: "asc" },
-  });
+  const customHolidays = tenantHolidays.map((h) =>
+    new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo", year: "numeric", month: "2-digit", day: "2-digit" }).format(h.date),
+  );
+  for (const h of tenantHolidays) {
+    if (h.recurring) {
+      const d = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo", month: "2-digit", day: "2-digit" }).format(h.date);
+      customHolidays.push(`${year}-${d}`);
+      customHolidays.push(`${year + 1}-${d}`);
+    }
+  }
 
   const entriesByUser = new Map<string, typeof entries>();
   for (const entry of entries) {
@@ -82,6 +95,7 @@ export async function GET(req: Request) {
           holidayRate: Number(cfg.holidayRate),
         },
         month,
+        customHolidays,
       );
       return { cfg, result };
     });

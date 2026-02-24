@@ -156,14 +156,18 @@ export function calculateMonthlyPayroll(
   entries: TimeEntryForPayroll[],
   config: PayrollConfigInput,
   month: string,  // "YYYY-MM"
+  customHolidays?: string[],  // "YYYY-MM-DD" strings for company-specific holidays
 ): MonthlyPayrollResult {
   const dailyBreakdown: DailyBreakdown[] = [];
   const [year] = month.split("-").map(Number);
 
-  // Build holiday set for the year (covers Dec→Jan spans too)
+  // Build holiday set: national holidays + company custom holidays
   const holidays = getJapaneseHolidays(year);
   const holidaysAdj = getJapaneseHolidays(year + 1);
   const mergedHolidays = new Set([...holidays, ...holidaysAdj]);
+  if (customHolidays) {
+    for (const d of customHolidays) mergedHolidays.add(d);
+  }
 
   let totalWorkMinutes = 0;
   let totalScheduledMinutes = 0;
