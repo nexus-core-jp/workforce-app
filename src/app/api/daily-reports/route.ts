@@ -49,35 +49,40 @@ export async function POST(req: Request) {
     return jsonError("既に提出済みです", 409);
   }
 
-  const report = await prisma.dailyReport.upsert({
-    where: { tenantId_userId_date: { tenantId, userId, date } },
-    create: {
-      tenantId,
-      userId,
-      date,
-      route: input.data.route ?? null,
-      cases: input.data.cases ?? null,
-      workHoursText: input.data.workHoursText ?? null,
-      incidentsText: input.data.incidentsText ?? null,
-      notesText: input.data.notesText ?? null,
-      announcementsText: input.data.announcementsText ?? null,
-      status: shouldSubmit ? "SUBMITTED" : "DRAFT",
-      submittedAt: shouldSubmit ? new Date() : null,
-    },
-    update: {
-      route: input.data.route ?? null,
-      cases: input.data.cases ?? null,
-      workHoursText: input.data.workHoursText ?? null,
-      incidentsText: input.data.incidentsText ?? null,
-      notesText: input.data.notesText ?? null,
-      announcementsText: input.data.announcementsText ?? null,
-      ...(shouldSubmit
-        ? { status: "SUBMITTED", submittedAt: new Date() }
-        : {}),
-    },
-  });
+  try {
+    const report = await prisma.dailyReport.upsert({
+      where: { tenantId_userId_date: { tenantId, userId, date } },
+      create: {
+        tenantId,
+        userId,
+        date,
+        route: input.data.route ?? null,
+        cases: input.data.cases ?? null,
+        workHoursText: input.data.workHoursText ?? null,
+        incidentsText: input.data.incidentsText ?? null,
+        notesText: input.data.notesText ?? null,
+        announcementsText: input.data.announcementsText ?? null,
+        status: shouldSubmit ? "SUBMITTED" : "DRAFT",
+        submittedAt: shouldSubmit ? new Date() : null,
+      },
+      update: {
+        route: input.data.route ?? null,
+        cases: input.data.cases ?? null,
+        workHoursText: input.data.workHoursText ?? null,
+        incidentsText: input.data.incidentsText ?? null,
+        notesText: input.data.notesText ?? null,
+        announcementsText: input.data.announcementsText ?? null,
+        ...(shouldSubmit
+          ? { status: "SUBMITTED", submittedAt: new Date() }
+          : {}),
+      },
+    });
 
-  return NextResponse.json({ ok: true, report });
+    return NextResponse.json({ ok: true, report });
+  } catch (err) {
+    console.error("[daily-reports] DB error:", err);
+    return jsonError("日報の保存に失敗しました。再度お試しください。", 500);
+  }
 }
 
 /** GET: Fetch daily reports for the authenticated user */

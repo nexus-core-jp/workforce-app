@@ -42,7 +42,44 @@ export async function POST(request: Request) {
             action: "STRIPE_CHECKOUT_COMPLETED",
             entityType: "Tenant",
             entityId: tenantId,
-            afterJson: { plan: "ACTIVE", subscriptionId: String(session.subscription ?? "") },
+            afterJson: {
+              plan: "ACTIVE",
+              subscriptionId: String(session.subscription ?? ""),
+              amountTotal: session.amount_total,
+            },
+          },
+        });
+      }
+      break;
+    }
+
+    case "invoice.payment_succeeded": {
+      const invoice = event.data.object as Stripe.Invoice;
+      const customerId = invoice.customer as string;
+      const tenant = await prisma.tenant.findUnique({
+        where: { stripeCustomerId: customerId },
+      });
+      if (tenant) {
+        // Ensure ACTIVE plan on successful payment (recovers from past failures)
+        if (tenant.plan !== "ACTIVE") {
+          await prisma.tenant.update({
+            where: { id: tenant.id },
+            data: { plan: "ACTIVE" },
+          });
+        }
+        await prisma.auditLog.create({
+          data: {
+            tenantId: tenant.id,
+            action: "STRIPE_PAYMENT_SUCCEEDED",
+            entityType: "Tenant",
+            entityId: tenant.id,
+            afterJson: {
+              invoiceId: invoice.id,
+              amountPaid: invoice.amount_paid,
+              currency: invoice.currency,
+              periodStart: invoice.period_start,
+              periodEnd: invoice.period_end,
+            },
           },
         });
       }
@@ -67,7 +104,48 @@ export async function POST(request: Request) {
             entityType: "Tenant",
             entityId: tenant.id,
             beforeJson: { plan: tenant.plan },
-            afterJson: { plan: "SUSPENDED" },
+            afterJson: {
+              plan: "SUSPENDED",
+              invoiceId: invoice.id,
+              attemptCount: invoice.attempt_count,
+            },
+          },
+        });
+      }
+      break;
+    }
+
+    case "customer.subscription.updated": {
+      const subscription = event.data.object as Stripe.Subscription;
+      const customerId = subscription.customer as string;
+      const tenant = await prisma.tenant.findUnique({
+        where: { stripeCustomerId: customerId },
+      });
+      if (tenant) {
+        // Update plan based on subscription status
+        let newPlan: "ACTIVE" | "SUSPENDED" = "ACTIVE";
+        if (subscription.status === "canceled" || subscription.status === "unpaid" || subscription.status === "past_due") {
+          newPlan = "SUSPENDED";
+        }
+        await prisma.tenant.update({
+          where: { id: tenant.id },
+          data: {
+            plan: newPlan,
+            stripeSubscriptionId: subscription.id,
+          },
+        });
+        await prisma.auditLog.create({
+          data: {
+            tenantId: tenant.id,
+            action: "STRIPE_SUBSCRIPTION_UPDATED",
+            entityType: "Tenant",
+            entityId: tenant.id,
+            beforeJson: { plan: tenant.plan },
+            afterJson: {
+              plan: newPlan,
+              status: subscription.status,
+              cancelAtPeriodEnd: subscription.cancel_at_period_end,
+            },
           },
         });
       }

@@ -93,18 +93,23 @@ export async function POST(req: Request) {
     next.clockOutAt = now;
   }
 
-  const updated = await prisma.timeEntry.update({
-    where: { id: entry.id },
-    data: {
-      ...next,
-      workMinutes: computeWorkMinutes({
-        clockInAt: next.clockInAt ?? entry.clockInAt,
-        clockOutAt: next.clockOutAt ?? entry.clockOutAt,
-        breakStartAt: next.breakStartAt ?? entry.breakStartAt,
-        breakEndAt: next.breakEndAt ?? entry.breakEndAt,
-      }),
-    },
-  });
+  try {
+    const updated = await prisma.timeEntry.update({
+      where: { id: entry.id },
+      data: {
+        ...next,
+        workMinutes: computeWorkMinutes({
+          clockInAt: next.clockInAt ?? entry.clockInAt,
+          clockOutAt: next.clockOutAt ?? entry.clockOutAt,
+          breakStartAt: next.breakStartAt ?? entry.breakStartAt,
+          breakEndAt: next.breakEndAt ?? entry.breakEndAt,
+        }),
+      },
+    });
 
-  return NextResponse.json({ ok: true, entry: updated });
+    return NextResponse.json({ ok: true, entry: updated });
+  } catch (err) {
+    console.error("[time-entry/punch] DB error:", err);
+    return jsonError("打刻の保存に失敗しました。再度お試しください。", 500);
+  }
 }
