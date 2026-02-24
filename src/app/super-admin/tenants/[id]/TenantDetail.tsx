@@ -40,7 +40,9 @@ function maskEmail(email: string): string {
 export function TenantDetail({ tenant, users }: { tenant: TenantInfo; users: UserInfo[] }) {
   const router = useRouter();
   const [showPii, setShowPii] = useState(false);
+  const [piiConfirm, setPiiConfirm] = useState(false);
   const [changingPlan, setChangingPlan] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const trialDays = tenant.trialEndsAt
     ? Math.ceil((new Date(tenant.trialEndsAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
@@ -56,6 +58,7 @@ export function TenantDetail({ tenant, users }: { tenant: TenantInfo; users: Use
   async function changePlan(newPlan: TenantPlan) {
     if (newPlan === tenant.plan) return;
     setChangingPlan(true);
+    setError(null);
     try {
       const res = await fetch(`/api/super-admin/tenants/${tenant.id}/plan`, {
         method: "POST",
@@ -66,10 +69,10 @@ export function TenantDetail({ tenant, users }: { tenant: TenantInfo; users: Use
         router.refresh();
       } else {
         const data = await res.json();
-        alert(data.error ?? "プラン変更に失敗しました");
+        setError(data.error ?? "プラン変更に失敗しました");
       }
     } catch {
-      alert("プラン変更に失敗しました");
+      setError("プラン変更に失敗しました");
     } finally {
       setChangingPlan(false);
     }
@@ -77,9 +80,15 @@ export function TenantDetail({ tenant, users }: { tenant: TenantInfo; users: Use
 
   function handleTogglePii() {
     if (!showPii) {
-      if (!window.confirm("個人情報を表示しますか？閲覧記録が残ります。")) return;
+      setPiiConfirm(true);
+      return;
     }
-    setShowPii(!showPii);
+    setShowPii(false);
+  }
+
+  function confirmPii() {
+    setPiiConfirm(false);
+    setShowPii(true);
   }
 
   return (
@@ -154,6 +163,7 @@ export function TenantDetail({ tenant, users }: { tenant: TenantInfo; users: Use
               </button>
             ))}
           </div>
+          {error && <p className="error-text">{error}</p>}
         </section>
 
         {/* User list */}
@@ -164,6 +174,22 @@ export function TenantDetail({ tenant, users }: { tenant: TenantInfo; users: Use
               {showPii ? "個人情報を非表示" : "個人情報を表示"}
             </button>
           </div>
+
+          {piiConfirm && (
+            <div style={{
+              padding: 16,
+              marginBottom: 12,
+              background: "var(--color-bg)",
+              border: "1px solid var(--color-border)",
+              borderRadius: "var(--radius)",
+            }}>
+              <p style={{ fontSize: 14, marginBottom: 12 }}>個人情報を表示しますか？閲覧記録が残ります。</p>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button data-variant="primary" className="btn-compact" onClick={confirmPii}>表示する</button>
+                <button className="btn-compact" onClick={() => setPiiConfirm(false)}>キャンセル</button>
+              </div>
+            </div>
+          )}
 
           <div className="table-scroll">
             <table>

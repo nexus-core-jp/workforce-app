@@ -37,6 +37,11 @@ export async function POST() {
     });
   }
 
+  const priceId = process.env.STRIPE_PRICE_ID;
+  if (!priceId) {
+    return NextResponse.json({ error: "Stripe price not configured" }, { status: 500 });
+  }
+
   const baseUrl = process.env.AUTH_URL || "http://localhost:3002";
 
   const checkoutSession = await getStripe().checkout.sessions.create({
@@ -44,7 +49,7 @@ export async function POST() {
     mode: "subscription",
     line_items: [
       {
-        price: process.env.STRIPE_PRICE_ID!,
+        price: priceId,
         quantity: 1,
       },
     ],

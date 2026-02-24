@@ -12,15 +12,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing signature" }, { status: 400 });
   }
 
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  if (!webhookSecret) {
+    return NextResponse.json({ error: "Webhook not configured" }, { status: 500 });
+  }
+
   let event: Stripe.Event;
   try {
-    event = getStripe().webhooks.constructEvent(
-      body,
-      sig,
-      process.env.STRIPE_WEBHOOK_SECRET!,
-    );
-  } catch (err) {
-    console.error("[stripe-webhook] signature verification failed:", err);
+    event = getStripe().webhooks.constructEvent(body, sig, webhookSecret);
+  } catch {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 

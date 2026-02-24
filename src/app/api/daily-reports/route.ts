@@ -2,13 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { auth } from "@/auth";
+import { jsonError } from "@/lib/api";
 import { prisma } from "@/lib/db";
 import { toSessionUser } from "@/lib/session";
 import { startOfJstDay } from "@/lib/time";
-
-function jsonError(message: string, status = 400) {
-  return NextResponse.json({ ok: false, error: message }, { status });
-}
 
 const upsertSchema = z.object({
   date: z.string().min(10),

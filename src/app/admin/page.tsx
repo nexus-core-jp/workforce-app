@@ -26,12 +26,6 @@ export default async function AdminPage() {
     redirect("/dashboard");
   }
 
-  // Fetch tenant for trial info
-  const tenant = await prisma.tenant.findUnique({
-    where: { id: tenantId },
-    select: { plan: true, trialEndsAt: true },
-  });
-
   const today = startOfJstDay(new Date());
   const month = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Tokyo",
@@ -39,28 +33,41 @@ export default async function AdminPage() {
     month: "2-digit",
   }).format(today);
 
-  // Monthly close status (ADMIN only)
-  const companyClose =
-    role === "ADMIN"
-      ? await prisma.close.findUnique({
-          where: {
-            tenantId_month_scope_departmentId: {
-              tenantId,
-              month,
-              scope: "COMPANY",
-              departmentId: "",
+  // Parallelize independent DB queries for faster page load
+  const [tenant, companyClose, pendingCorrections, recentDailyReports, memberCount, todayEntries, todayClockedOut] =
+    await Promise.all([
+      prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { plan: true, trialEndsAt: true },
+      }),
+      role === "ADMIN"
+        ? prisma.close.findUnique({
+            where: {
+              tenantId_month_scope_departmentId: {
+                tenantId,
+                month,
+                scope: "COMPANY",
+                departmentId: "",
+              },
             },
-          },
-        })
-      : null;
-
-  // Pending correction requests
-  const pendingCorrections = await prisma.attendanceCorrection.findMany({
-    where: { tenantId, status: "PENDING" },
-    orderBy: { createdAt: "desc" },
-    take: 20,
-    include: { user: true },
-  });
+          })
+        : Promise.resolve(null),
+      prisma.attendanceCorrection.findMany({
+        where: { tenantId, status: "PENDING" },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+        include: { user: true },
+      }),
+      prisma.dailyReport.findMany({
+        where: { tenantId, status: "SUBMITTED" },
+        orderBy: { submittedAt: "desc" },
+        take: 20,
+        include: { user: { select: { name: true, email: true } } },
+      }),
+      prisma.user.count({ where: { tenantId } }),
+      prisma.timeEntry.count({ where: { tenantId, date: today } }),
+      prisma.timeEntry.count({ where: { tenantId, date: today, clockOutAt: { not: null } } }),
+    ]);
 
   const pendingCorrectionsUi = pendingCorrections.map((p) => ({
     id: p.id,
@@ -74,14 +81,6 @@ export default async function AdminPage() {
     }).format(p.date),
     reason: p.reason,
   }));
-
-  // Recent submitted daily reports
-  const recentDailyReports = await prisma.dailyReport.findMany({
-    where: { tenantId, status: "SUBMITTED" },
-    orderBy: { submittedAt: "desc" },
-    take: 20,
-    include: { user: { select: { name: true, email: true } } },
-  });
 
   const dailyReportsUi = recentDailyReports.map((r) => ({
     id: r.id,
@@ -105,17 +104,6 @@ export default async function AdminPage() {
         }).format(r.submittedAt)
       : null,
   }));
-
-  // Member count
-  const memberCount = await prisma.user.count({ where: { tenantId } });
-
-  // Today's attendance summary
-  const todayEntries = await prisma.timeEntry.count({
-    where: { tenantId, date: today },
-  });
-  const todayClockedOut = await prisma.timeEntry.count({
-    where: { tenantId, date: today, clockOutAt: { not: null } },
-  });
 
   const roleLabel = role === "ADMIN" ? "管理者" : "承認者";
 

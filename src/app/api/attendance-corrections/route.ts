@@ -2,14 +2,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { auth } from "@/auth";
+import { jsonError } from "@/lib/api";
 import { isMonthClosed } from "@/lib/close";
 import { prisma } from "@/lib/db";
 import { toSessionUser } from "@/lib/session";
 import { startOfJstDay } from "@/lib/time";
-
-function jsonError(message: string, status = 400) {
-  return NextResponse.json({ ok: false, error: message }, { status });
-}
 
 const schema = z.object({
   // YYYY-MM-DD (JST)

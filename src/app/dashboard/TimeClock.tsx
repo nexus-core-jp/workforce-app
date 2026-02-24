@@ -25,6 +25,7 @@ export function TimeClock(props: {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmClockOut, setConfirmClockOut] = useState(false);
 
   const run = async (action: PunchAction) => {
     setError(null);
@@ -36,6 +37,7 @@ export function TimeClock(props: {
       setError(e instanceof Error ? e.message : "打刻に失敗しました");
     } finally {
       setLoading(false);
+      setConfirmClockOut(false);
     }
   };
 
@@ -62,13 +64,32 @@ export function TimeClock(props: {
         >
           休憩終了
         </button>
-        <button
-          data-variant="danger"
-          disabled={!props.canClockOut || loading}
-          onClick={() => run("CLOCK_OUT")}
-        >
-          退勤
-        </button>
+        {confirmClockOut ? (
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <button
+              data-variant="danger"
+              disabled={loading}
+              onClick={() => run("CLOCK_OUT")}
+            >
+              {loading ? "処理中..." : "退勤する"}
+            </button>
+            <button
+              className="btn-compact"
+              disabled={loading}
+              onClick={() => setConfirmClockOut(false)}
+            >
+              キャンセル
+            </button>
+          </div>
+        ) : (
+          <button
+            data-variant="danger"
+            disabled={!props.canClockOut || loading}
+            onClick={() => setConfirmClockOut(true)}
+          >
+            退勤
+          </button>
+        )}
       </div>
       {error ? <p className="error-text">エラー: {error}</p> : null}
     </section>

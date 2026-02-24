@@ -22,16 +22,29 @@ export default async function DashboardPage() {
 
   if (role === "SUPER_ADMIN") redirect("/super-admin");
 
-  // Fetch tenant for trial info
-  const tenant = await prisma.tenant.findUnique({
-    where: { id: tenantId },
-    select: { plan: true, trialEndsAt: true },
-  });
-
   const today = startOfJstDay(new Date());
-  const entry = await prisma.timeEntry.findUnique({
-    where: { tenantId_userId_date: { tenantId, userId, date: today } },
-  });
+  const from = addJstDays(today, -6);
+
+  // Parallelize independent DB queries for faster page load
+  const [tenant, entry, history, myPendingCount, dailyReport] = await Promise.all([
+    prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { plan: true, trialEndsAt: true },
+    }),
+    prisma.timeEntry.findUnique({
+      where: { tenantId_userId_date: { tenantId, userId, date: today } },
+    }),
+    prisma.timeEntry.findMany({
+      where: { tenantId, userId, date: { gte: from, lte: today } },
+      orderBy: { date: "desc" },
+    }),
+    prisma.attendanceCorrection.count({
+      where: { tenantId, userId, status: "PENDING" },
+    }),
+    prisma.dailyReport.findUnique({
+      where: { tenantId_userId_date: { tenantId, userId, date: today } },
+    }),
+  ]);
 
   const clockInAt = entry?.clockInAt ?? null;
   const breakStartAt = entry?.breakStartAt ?? null;
@@ -42,20 +55,6 @@ export default async function DashboardPage() {
   const canBreakStart = !!clockInAt && !clockOutAt && !breakStartAt;
   const canBreakEnd = !!breakStartAt && !breakEndAt;
   const canClockOut = !!clockInAt && !clockOutAt && (!breakStartAt || !!breakEndAt);
-
-  // Last 7 days entries
-  const from = addJstDays(today, -6);
-  const history = await prisma.timeEntry.findMany({
-    where: {
-      tenantId,
-      userId,
-      date: {
-        gte: from,
-        lte: today,
-      },
-    },
-    orderBy: { date: "desc" },
-  });
 
   const historyMap = new Map(history.map((h) => [h.date.toISOString(), h]));
   const historyItems = Array.from({ length: 7 }, (_, i) => {
@@ -87,23 +86,14 @@ export default async function DashboardPage() {
     };
   });
 
-  // My pending correction count
-  const myPendingCount = await prisma.attendanceCorrection.count({
-    where: { tenantId, userId, status: "PENDING" },
-  });
-
   const isAdminOrApprover = role === "ADMIN" || role === "APPROVER";
 
-  // Today's daily report
   const todayYmd = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Tokyo",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
   }).format(today);
-  const dailyReport = await prisma.dailyReport.findUnique({
-    where: { tenantId_userId_date: { tenantId, userId, date: today } },
-  });
   const dailyReportStatus: "none" | "draft" | "submitted" =
     dailyReport?.status === "SUBMITTED" ? "submitted" : dailyReport ? "draft" : "none";
 

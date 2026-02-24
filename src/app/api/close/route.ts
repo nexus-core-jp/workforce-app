@@ -3,13 +3,10 @@ import { z } from "zod";
 
 import { Prisma } from "@/generated/prisma";
 import { auth } from "@/auth";
+import { jsonError } from "@/lib/api";
 import { prisma } from "@/lib/db";
 import { toSessionUser } from "@/lib/session";
 import { toCloseMonth } from "@/lib/jst";
-
-function jsonError(message: string, status = 400) {
-  return NextResponse.json({ ok: false, error: message }, { status });
-}
 
 const schema = z.object({
   month: z.string().regex(/^\d{4}-\d{2}$/).optional(),

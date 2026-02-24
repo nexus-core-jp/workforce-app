@@ -4,17 +4,21 @@ import { useState } from "react";
 
 export function BillingActions({ plan }: { plan: string }) {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleCheckout() {
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch("/api/stripe/checkout", { method: "POST" });
       const data = await res.json();
       if (data.url) {
         window.location.href = data.url;
+      } else {
+        setError(data.error ?? "チェックアウトの作成に失敗しました");
       }
-    } catch (err) {
-      console.error("Checkout error:", err);
+    } catch {
+      setError("ネットワークエラーが発生しました。再度お試しください。");
     } finally {
       setLoading(false);
     }
@@ -22,14 +26,17 @@ export function BillingActions({ plan }: { plan: string }) {
 
   async function handlePortal() {
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch("/api/stripe/portal", { method: "POST" });
       const data = await res.json();
       if (data.url) {
         window.location.href = data.url;
+      } else {
+        setError(data.error ?? "支払い管理画面の取得に失敗しました");
       }
-    } catch (err) {
-      console.error("Portal error:", err);
+    } catch {
+      setError("ネットワークエラーが発生しました。再度お試しください。");
     } finally {
       setLoading(false);
     }
@@ -37,9 +44,12 @@ export function BillingActions({ plan }: { plan: string }) {
 
   if (plan === "ACTIVE") {
     return (
-      <button onClick={handlePortal} disabled={loading} data-variant="primary">
-        {loading ? "読み込み中..." : "支払い管理（Stripe）"}
-      </button>
+      <div>
+        <button onClick={handlePortal} disabled={loading} data-variant="primary">
+          {loading ? "読み込み中..." : "支払い管理（Stripe）"}
+        </button>
+        {error && <p className="error-text">{error}</p>}
+      </div>
     );
   }
 
@@ -52,14 +62,18 @@ export function BillingActions({ plan }: { plan: string }) {
         <button onClick={handleCheckout} disabled={loading} data-variant="primary">
           {loading ? "読み込み中..." : "再サブスクライブ"}
         </button>
+        {error && <p className="error-text">{error}</p>}
       </div>
     );
   }
 
   // TRIAL
   return (
-    <button onClick={handleCheckout} disabled={loading} data-variant="primary">
-      {loading ? "読み込み中..." : "有料プランにアップグレード"}
-    </button>
+    <div>
+      <button onClick={handleCheckout} disabled={loading} data-variant="primary">
+        {loading ? "読み込み中..." : "有料プランにアップグレード"}
+      </button>
+      {error && <p className="error-text">{error}</p>}
+    </div>
   );
 }

@@ -47,6 +47,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           role: user.role,
           departmentId: user.departmentId,
           plan: dbTenant.plan,
+          trialEndsAt: dbTenant.trialEndsAt?.toISOString() ?? null,
         };
       },
     }),
@@ -64,6 +65,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.role = u.role as string;
         token.departmentId = (u.departmentId as string) ?? null;
         token.plan = u.plan as string;
+        token.trialEndsAt = (u.trialEndsAt as string) ?? null;
       }
       return token;
     },
