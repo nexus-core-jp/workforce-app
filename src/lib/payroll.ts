@@ -1,0 +1,329 @@
+// Payroll calculation logic
+// - Overtime: daily >8h (480min) or monthly total exceeding scheduled hours
+// - Late-night: work between 22:00-05:00 JST
+// - Holiday: Saturday/Sunday work (JST calendar)
+
+const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+interface TimeEntryForPayroll {
+  date: Date;
+  clockInAt: Date | null;
+  clockOutAt: Date | null;
+  breakStartAt: Date | null;
+  breakEndAt: Date | null;
+  workMinutes: number;
+}
+
+interface PayrollConfigInput {
+  payType: "MONTHLY" | "HOURLY" | "DAILY";
+  baseSalary: number;
+  hourlyRate: number;
+  commuteAllowance: number;
+  housingAllowance: number;
+  familyAllowance: number;
+  otherAllowance: number;
+  scheduledWorkDays: number;
+  scheduledWorkMinutes: number;   // per day
+  overtimeRate: number;           // e.g. 1.25
+  lateNightRate: number;          // e.g. 1.50
+  holidayRate: number;            // e.g. 1.35
+}
+
+export interface DailyBreakdown {
+  date: string;          // YYYY-MM-DD
+  dayOfWeek: number;     // 0=Sun, 6=Sat
+  isHoliday: boolean;
+  workMinutes: number;
+  scheduledMinutes: number;
+  overtimeMinutes: number;
+  lateNightMinutes: number;
+  holidayMinutes: number;
+}
+
+export interface MonthlyPayrollResult {
+  workDays: number;
+  absentDays: number;
+  totalWorkMinutes: number;
+  scheduledMinutes: number;
+  overtimeMinutes: number;
+  lateNightMinutes: number;
+  holidayMinutes: number;
+  basePay: number;
+  overtimePay: number;
+  lateNightPay: number;
+  holidayPay: number;
+  commuteAllowance: number;
+  otherAllowances: number;
+  grossPay: number;
+  deductions: number;
+  netPay: number;
+  dailyBreakdown: DailyBreakdown[];
+  overtime36Alert: Overtime36Alert | null;
+}
+
+export interface Overtime36Alert {
+  monthlyOvertimeHours: number;
+  isOver45h: boolean;
+  isOver80h: boolean;
+  message: string;
+}
+
+/** Get JST hour (0-23) from a UTC Date */
+function getJstHour(date: Date): number {
+  const jstMs = date.getTime() + JST_OFFSET_MS;
+  return new Date(jstMs).getUTCHours();
+}
+
+/** Get JST day-of-week (0=Sun) from a date-only field */
+function getJstDayOfWeek(dateOnly: Date): number {
+  const jstMs = dateOnly.getTime() + JST_OFFSET_MS;
+  return new Date(jstMs).getUTCDay();
+}
+
+/** Check if date falls on weekend (Sat=6 or Sun=0) */
+function isWeekend(dateOnly: Date): boolean {
+  const dow = getJstDayOfWeek(dateOnly);
+  return dow === 0 || dow === 6;
+}
+
+/**
+ * Calculate late-night minutes (22:00-05:00 JST) from clockIn/clockOut.
+ * This measures actual overlap with the 22-05 window.
+ */
+function calcLateNightMinutes(clockIn: Date, clockOut: Date): number {
+  const inMs = clockIn.getTime();
+  const outMs = clockOut.getTime();
+  if (outMs <= inMs) return 0;
+
+  let total = 0;
+
+  // Check each hour boundary for late-night overlap
+  // Late night is 22:00-05:00 JST
+  // We iterate in 1-minute granularity for accuracy
+  const startMin = Math.floor(inMs / 60000);
+  const endMin = Math.floor(outMs / 60000);
+
+  for (let m = startMin; m < endMin; m++) {
+    const hour = getJstHour(new Date(m * 60000));
+    if (hour >= 22 || hour < 5) {
+      total++;
+    }
+  }
+
+  return total;
+}
+
+/**
+ * Calculate monthly payroll for a single employee.
+ */
+export function calculateMonthlyPayroll(
+  entries: TimeEntryForPayroll[],
+  config: PayrollConfigInput,
+  month: string,  // "YYYY-MM"
+): MonthlyPayrollResult {
+  const dailyBreakdown: DailyBreakdown[] = [];
+
+  let totalWorkMinutes = 0;
+  let totalScheduledMinutes = 0;
+  let totalOvertimeMinutes = 0;
+  let totalLateNightMinutes = 0;
+  let totalHolidayMinutes = 0;
+  let workDays = 0;
+
+  for (const entry of entries) {
+    if (!entry.clockInAt || entry.workMinutes === 0) continue;
+
+    const holiday = isWeekend(entry.date);
+    const dayWork = entry.workMinutes;
+
+    workDays++;
+    totalWorkMinutes += dayWork;
+
+    // Late-night calculation (requires actual clock times)
+    let lateNight = 0;
+    if (entry.clockInAt && entry.clockOutAt) {
+      lateNight = calcLateNightMinutes(entry.clockInAt, entry.clockOutAt);
+      // Subtract break time from late-night if break overlaps
+      if (entry.breakStartAt && entry.breakEndAt) {
+        const breakLateNight = calcLateNightMinutes(entry.breakStartAt, entry.breakEndAt);
+        lateNight = Math.max(0, lateNight - breakLateNight);
+      }
+    }
+
+    let overtime = 0;
+    let scheduled = dayWork;
+
+    if (holiday) {
+      // All work on holidays counts as holiday work
+      totalHolidayMinutes += dayWork;
+      scheduled = 0;
+    } else {
+      // Overtime = work beyond scheduled daily hours (e.g. 8h = 480min)
+      if (dayWork > config.scheduledWorkMinutes) {
+        overtime = dayWork - config.scheduledWorkMinutes;
+        scheduled = config.scheduledWorkMinutes;
+      }
+      totalOvertimeMinutes += overtime;
+    }
+
+    totalScheduledMinutes += scheduled;
+    totalLateNightMinutes += lateNight;
+
+    const dateStr = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Tokyo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(entry.date);
+
+    dailyBreakdown.push({
+      date: dateStr,
+      dayOfWeek: getJstDayOfWeek(entry.date),
+      isHoliday: holiday,
+      workMinutes: dayWork,
+      scheduledMinutes: scheduled,
+      overtimeMinutes: overtime,
+      lateNightMinutes: lateNight,
+      holidayMinutes: holiday ? dayWork : 0,
+    });
+  }
+
+  // Calculate absent days (scheduled work days minus actual work days on weekdays)
+  const [year, mon] = month.split("-").map(Number);
+  const daysInMonth = new Date(year, mon, 0).getDate();
+  let scheduledWorkDaysInMonth = 0;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dt = new Date(Date.UTC(year, mon - 1, d) - JST_OFFSET_MS);
+    if (!isWeekend(dt)) {
+      scheduledWorkDaysInMonth++;
+    }
+  }
+  const weekdayWorkDays = dailyBreakdown.filter(d => !d.isHoliday).length;
+  const absentDays = Math.max(0, scheduledWorkDaysInMonth - weekdayWorkDays);
+
+  // --- Pay calculation ---
+  const baseHourlyRate = calcBaseHourlyRate(config);
+
+  // Base pay
+  let basePay: number;
+  if (config.payType === "MONTHLY") {
+    // Monthly salary - deduct absent days proportionally
+    const fullBase = config.baseSalary;
+    if (absentDays > 0 && scheduledWorkDaysInMonth > 0) {
+      const dailyRate = fullBase / scheduledWorkDaysInMonth;
+      basePay = Math.round(fullBase - dailyRate * absentDays);
+    } else {
+      basePay = fullBase;
+    }
+  } else if (config.payType === "DAILY") {
+    basePay = config.baseSalary * workDays;
+  } else {
+    // HOURLY
+    basePay = Math.round(config.hourlyRate * (totalScheduledMinutes / 60));
+  }
+
+  // Overtime pay (時間外手当)
+  const overtimePay = Math.round(baseHourlyRate * config.overtimeRate * (totalOvertimeMinutes / 60));
+
+  // Late-night pay (深夜手当) - additional premium only (0.25 or 0.50 - 1.0 portion)
+  // Late-night premium is the difference above normal rate
+  const lateNightPremiumRate = config.lateNightRate - 1.0;
+  const lateNightPay = Math.round(baseHourlyRate * lateNightPremiumRate * (totalLateNightMinutes / 60));
+
+  // Holiday pay (休日手当)
+  const holidayPay = Math.round(baseHourlyRate * config.holidayRate * (totalHolidayMinutes / 60));
+
+  // Allowances
+  const commuteAllowance = config.commuteAllowance;
+  const otherAllowances = config.housingAllowance + config.familyAllowance + config.otherAllowance;
+
+  const grossPay = basePay + overtimePay + lateNightPay + holidayPay + commuteAllowance + otherAllowances;
+  const deductions = 0; // Phase 2: social insurance, tax
+  const netPay = grossPay - deductions;
+
+  // 36 Agreement alert
+  const overtimeHours = totalOvertimeMinutes / 60;
+  let overtime36Alert: Overtime36Alert | null = null;
+  if (overtimeHours > 45) {
+    overtime36Alert = {
+      monthlyOvertimeHours: Math.round(overtimeHours * 10) / 10,
+      isOver45h: true,
+      isOver80h: overtimeHours > 80,
+      message: overtimeHours > 80
+        ? `月間残業 ${Math.round(overtimeHours)}時間: 過労死ラインを超えています`
+        : `月間残業 ${Math.round(overtimeHours)}時間: 36協定の上限(45h)を超えています`,
+    };
+  } else if (overtimeHours > 30) {
+    overtime36Alert = {
+      monthlyOvertimeHours: Math.round(overtimeHours * 10) / 10,
+      isOver45h: false,
+      isOver80h: false,
+      message: `月間残業 ${Math.round(overtimeHours)}時間: 36協定上限(45h)に注意`,
+    };
+  }
+
+  return {
+    workDays,
+    absentDays,
+    totalWorkMinutes,
+    scheduledMinutes: totalScheduledMinutes,
+    overtimeMinutes: totalOvertimeMinutes,
+    lateNightMinutes: totalLateNightMinutes,
+    holidayMinutes: totalHolidayMinutes,
+    basePay,
+    overtimePay,
+    lateNightPay,
+    holidayPay,
+    commuteAllowance,
+    otherAllowances,
+    grossPay,
+    deductions,
+    netPay,
+    dailyBreakdown,
+    overtime36Alert,
+  };
+}
+
+/** Calculate base hourly rate from config */
+function calcBaseHourlyRate(config: PayrollConfigInput): number {
+  if (config.payType === "HOURLY") return config.hourlyRate;
+  if (config.payType === "DAILY") {
+    return config.baseSalary / (config.scheduledWorkMinutes / 60);
+  }
+  // MONTHLY: monthly salary / (scheduled days * scheduled hours)
+  const monthlyHours = config.scheduledWorkDays * (config.scheduledWorkMinutes / 60);
+  return monthlyHours > 0 ? config.baseSalary / monthlyHours : 0;
+}
+
+/**
+ * Generate Zengin (全銀) format CSV for bank transfers.
+ * Simplified version: standard CSV with required fields for IB upload.
+ */
+export function generateZenginCsv(
+  payrolls: Array<{
+    bankCode: string;
+    branchCode: string;
+    accountType: string;
+    accountNumber: string;
+    accountHolder: string;
+    amount: number;
+  }>,
+): string {
+  const BOM = "\uFEFF";
+  const headers = ["銀行コード", "支店コード", "預金種目", "口座番号", "受取人名", "振込金額"];
+  const lines: string[] = [headers.join(",")];
+
+  for (const p of payrolls) {
+    const accountTypeCode = p.accountType === "当座" ? "2" : "1"; // 1=普通, 2=当座
+    lines.push([
+      p.bankCode.padStart(4, "0"),
+      p.branchCode.padStart(3, "0"),
+      accountTypeCode,
+      p.accountNumber.padStart(7, "0"),
+      p.accountHolder,
+      String(p.amount),
+    ].join(","));
+  }
+
+  return BOM + lines.join("\r\n") + "\r\n";
+}

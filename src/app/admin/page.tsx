@@ -153,6 +153,8 @@ export default async function AdminPage() {
         <nav style={{ display: "flex", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
           <Link href="/dashboard">← マイページ</Link>
           {role === "ADMIN" && <Link href="/admin/members">メンバー管理</Link>}
+          {role === "ADMIN" && <Link href="/admin/payroll">給与設定</Link>}
+          {role === "ADMIN" && <Link href="/admin/payroll/calc">給与計算</Link>}
           {role === "ADMIN" && <Link href="/admin/billing">プラン・請求</Link>}
           {role === "ADMIN" && <Link href="/admin/audit-logs">監査ログ</Link>}
         </nav>
