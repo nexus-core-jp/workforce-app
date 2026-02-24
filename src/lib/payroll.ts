@@ -1,7 +1,9 @@
 // Payroll calculation logic
 // - Overtime: daily >8h (480min) or monthly total exceeding scheduled hours
 // - Late-night: work between 22:00-05:00 JST
-// - Holiday: Saturday/Sunday work (JST calendar)
+// - Holiday: Saturday/Sunday + Japanese public holidays (祝日)
+
+import { getJapaneseHolidays } from "./holidays";
 
 const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
 
@@ -86,6 +88,22 @@ function isWeekend(dateOnly: Date): boolean {
   return dow === 0 || dow === 6;
 }
 
+/** Format a UTC-stored JST date to "YYYY-MM-DD" for holiday lookup */
+function toJstDateStr(dateOnly: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(dateOnly);
+}
+
+/** Check if date is a non-working day (weekend or Japanese public holiday) */
+function isNonWorkingDay(dateOnly: Date, holidays: Set<string>): boolean {
+  if (isWeekend(dateOnly)) return true;
+  return holidays.has(toJstDateStr(dateOnly));
+}
+
 /**
  * Calculate overlap in minutes between a work period and a single
  * late-night window [windowStart, windowEnd).
@@ -140,6 +158,12 @@ export function calculateMonthlyPayroll(
   month: string,  // "YYYY-MM"
 ): MonthlyPayrollResult {
   const dailyBreakdown: DailyBreakdown[] = [];
+  const [year] = month.split("-").map(Number);
+
+  // Build holiday set for the year (covers Dec→Jan spans too)
+  const holidays = getJapaneseHolidays(year);
+  const holidaysAdj = getJapaneseHolidays(year + 1);
+  const mergedHolidays = new Set([...holidays, ...holidaysAdj]);
 
   let totalWorkMinutes = 0;
   let totalScheduledMinutes = 0;
@@ -151,7 +175,7 @@ export function calculateMonthlyPayroll(
   for (const entry of entries) {
     if (!entry.clockInAt || entry.workMinutes === 0) continue;
 
-    const holiday = isWeekend(entry.date);
+    const holiday = isNonWorkingDay(entry.date, mergedHolidays);
     const dayWork = entry.workMinutes;
 
     workDays++;
@@ -206,13 +230,13 @@ export function calculateMonthlyPayroll(
     });
   }
 
-  // Calculate absent days (scheduled work days minus actual work days on weekdays)
-  const [year, mon] = month.split("-").map(Number);
+  // Calculate absent days (scheduled work days minus actual work days on working days)
+  const [, mon] = month.split("-").map(Number);
   const daysInMonth = new Date(year, mon, 0).getDate();
   let scheduledWorkDaysInMonth = 0;
   for (let d = 1; d <= daysInMonth; d++) {
     const dt = new Date(Date.UTC(year, mon - 1, d) - JST_OFFSET_MS);
-    if (!isWeekend(dt)) {
+    if (!isNonWorkingDay(dt, mergedHolidays)) {
       scheduledWorkDaysInMonth++;
     }
   }
