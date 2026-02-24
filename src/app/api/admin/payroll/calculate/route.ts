@@ -103,71 +103,52 @@ export async function POST(req: Request) {
     });
   }
 
-  // If confirm=true, save to MonthlyPayroll table
+  // If confirm=true, save to MonthlyPayroll table atomically
   if (confirm) {
-    for (const r of results) {
-      const p = r.payroll;
-      await prisma.monthlyPayroll.upsert({
-        where: { tenantId_userId_month: { tenantId, userId: r.userId, month } },
-        create: {
+    await prisma.$transaction(async (tx) => {
+      for (const r of results) {
+        const p = r.payroll;
+        const payrollData = {
+          totalWorkMinutes: p.totalWorkMinutes,
+          scheduledMinutes: p.scheduledMinutes,
+          overtimeMinutes: p.overtimeMinutes,
+          lateNightMinutes: p.lateNightMinutes,
+          holidayMinutes: p.holidayMinutes,
+          workDays: p.workDays,
+          absentDays: p.absentDays,
+          basePay: p.basePay,
+          overtimePay: p.overtimePay,
+          lateNightPay: p.lateNightPay,
+          holidayPay: p.holidayPay,
+          commuteAllowance: p.commuteAllowance,
+          otherAllowances: p.otherAllowances,
+          grossPay: p.grossPay,
+          deductions: p.deductions,
+          netPay: p.netPay,
+          status: "CONFIRMED" as const,
+          confirmedAt: new Date(),
+        };
+        await tx.monthlyPayroll.upsert({
+          where: { tenantId_userId_month: { tenantId, userId: r.userId, month } },
+          create: { tenantId, userId: r.userId, month, ...payrollData },
+          update: payrollData,
+        });
+      }
+
+      await tx.auditLog.create({
+        data: {
           tenantId,
-          userId: r.userId,
-          month,
-          totalWorkMinutes: p.totalWorkMinutes,
-          scheduledMinutes: p.scheduledMinutes,
-          overtimeMinutes: p.overtimeMinutes,
-          lateNightMinutes: p.lateNightMinutes,
-          holidayMinutes: p.holidayMinutes,
-          workDays: p.workDays,
-          absentDays: p.absentDays,
-          basePay: p.basePay,
-          overtimePay: p.overtimePay,
-          lateNightPay: p.lateNightPay,
-          holidayPay: p.holidayPay,
-          commuteAllowance: p.commuteAllowance,
-          otherAllowances: p.otherAllowances,
-          grossPay: p.grossPay,
-          deductions: p.deductions,
-          netPay: p.netPay,
-          status: "CONFIRMED",
-          confirmedAt: new Date(),
-        },
-        update: {
-          totalWorkMinutes: p.totalWorkMinutes,
-          scheduledMinutes: p.scheduledMinutes,
-          overtimeMinutes: p.overtimeMinutes,
-          lateNightMinutes: p.lateNightMinutes,
-          holidayMinutes: p.holidayMinutes,
-          workDays: p.workDays,
-          absentDays: p.absentDays,
-          basePay: p.basePay,
-          overtimePay: p.overtimePay,
-          lateNightPay: p.lateNightPay,
-          holidayPay: p.holidayPay,
-          commuteAllowance: p.commuteAllowance,
-          otherAllowances: p.otherAllowances,
-          grossPay: p.grossPay,
-          deductions: p.deductions,
-          netPay: p.netPay,
-          status: "CONFIRMED",
-          confirmedAt: new Date(),
+          actorUserId: actor.id,
+          action: "PAYROLL_CONFIRMED",
+          entityType: "MonthlyPayroll",
+          entityId: month,
+          afterJson: {
+            month,
+            employeeCount: results.length,
+            totalGross: results.reduce((s, r) => s + r.payroll.grossPay, 0),
+          },
         },
       });
-    }
-
-    await prisma.auditLog.create({
-      data: {
-        tenantId,
-        actorUserId: actor.id,
-        action: "PAYROLL_CONFIRMED",
-        entityType: "MonthlyPayroll",
-        entityId: month,
-        afterJson: {
-          month,
-          employeeCount: results.length,
-          totalGross: results.reduce((s, r) => s + r.payroll.grossPay, 0),
-        },
-      },
     });
   }
 

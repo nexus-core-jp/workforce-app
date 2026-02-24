@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 interface PayrollConfigData {
@@ -45,6 +46,7 @@ export function PayrollConfigForm({
   users: UserOption[];
   existingConfigs: ExistingConfig[];
 }) {
+  const router = useRouter();
   const [selectedUserId, setSelectedUserId] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -127,6 +129,7 @@ export function PayrollConfigForm({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "保存に失敗しました");
       setSuccess("保存しました");
+      router.refresh(); // Refresh server data (configured/unconfigured counts, labels)
     } catch (err) {
       setError(err instanceof Error ? err.message : "保存に失敗しました");
     } finally {
@@ -155,7 +158,7 @@ export function PayrollConfigForm({
           {users.map((u) => (
             <option key={u.id} value={u.id}>
               {u.name ?? u.email}
-              {existing && existingConfigs.some((c) => c.userId === u.id) ? " (設定済)" : ""}
+              {existingConfigs.some((c) => c.userId === u.id) ? " (設定済)" : ""}
             </option>
           ))}
         </select>

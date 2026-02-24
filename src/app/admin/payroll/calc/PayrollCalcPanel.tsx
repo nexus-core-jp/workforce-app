@@ -34,6 +34,7 @@ export function PayrollCalcPanel({ defaultMonth }: { defaultMonth: string }) {
   const [month, setMonth] = useState(defaultMonth);
   const [loading, setLoading] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [showConfirmPrompt, setShowConfirmPrompt] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<PayrollRow[] | null>(null);
   const [confirmed, setConfirmed] = useState(false);
@@ -61,7 +62,7 @@ export function PayrollCalcPanel({ defaultMonth }: { defaultMonth: string }) {
   };
 
   const confirm = async () => {
-    if (!window.confirm(`${month} の給与を確定しますか？`)) return;
+    setShowConfirmPrompt(false);
     setConfirming(true);
     setError(null);
 
@@ -240,11 +241,45 @@ export function PayrollCalcPanel({ defaultMonth }: { defaultMonth: string }) {
           </div>
 
           {/* Actions */}
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
-            {!confirmed && (
-              <button type="button" onClick={confirm} disabled={confirming} style={{ fontWeight: 700 }}>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16, alignItems: "center" }}>
+            {!confirmed && !showConfirmPrompt && (
+              <button
+                type="button"
+                onClick={() => setShowConfirmPrompt(true)}
+                disabled={confirming}
+                style={{ fontWeight: 700 }}
+              >
                 {confirming ? "確定中..." : "給与を確定する"}
               </button>
+            )}
+            {!confirmed && showConfirmPrompt && (
+              <div style={{
+                display: "flex",
+                gap: 8,
+                alignItems: "center",
+                padding: "8px 12px",
+                background: "#fff3e0",
+                border: "1px solid #ffb74d",
+                borderRadius: 6,
+              }}>
+                <span style={{ fontSize: 13, fontWeight: 600 }}>{month} の給与を確定しますか？</span>
+                <button
+                  type="button"
+                  onClick={confirm}
+                  disabled={confirming}
+                  style={{ fontWeight: 700, background: "#e65100", color: "#fff", border: "none", padding: "4px 12px", borderRadius: 4, cursor: "pointer" }}
+                >
+                  {confirming ? "確定中..." : "確定する"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPrompt(false)}
+                  disabled={confirming}
+                  style={{ padding: "4px 12px" }}
+                >
+                  キャンセル
+                </button>
+              </div>
             )}
             {confirmed && (
               <span style={{ color: "var(--color-success, #080)", fontWeight: 700, alignSelf: "center" }}>

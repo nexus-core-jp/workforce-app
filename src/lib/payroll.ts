@@ -87,27 +87,45 @@ function isWeekend(dateOnly: Date): boolean {
 }
 
 /**
+ * Calculate overlap in minutes between a work period and a single
+ * late-night window [windowStart, windowEnd).
+ */
+function overlapMinutes(workStart: number, workEnd: number, windowStart: number, windowEnd: number): number {
+  const start = Math.max(workStart, windowStart);
+  const end = Math.min(workEnd, windowEnd);
+  return Math.max(0, end - start);
+}
+
+/**
  * Calculate late-night minutes (22:00-05:00 JST) from clockIn/clockOut.
- * This measures actual overlap with the 22-05 window.
+ * Uses O(1) range overlap math instead of per-minute iteration.
  */
 function calcLateNightMinutes(clockIn: Date, clockOut: Date): number {
   const inMs = clockIn.getTime();
   const outMs = clockOut.getTime();
   if (outMs <= inMs) return 0;
 
+  // Convert to JST minutes since epoch
+  const inJstMin = Math.floor((inMs + JST_OFFSET_MS) / 60000);
+  const outJstMin = Math.floor((outMs + JST_OFFSET_MS) / 60000);
+
+  // Find the JST calendar day of clock-in
+  const MINUTES_PER_DAY = 1440;
+  const startDay = Math.floor(inJstMin / MINUTES_PER_DAY);
+  const endDay = Math.floor((outJstMin - 1) / MINUTES_PER_DAY);
+
   let total = 0;
 
-  // Check each hour boundary for late-night overlap
-  // Late night is 22:00-05:00 JST
-  // We iterate in 1-minute granularity for accuracy
-  const startMin = Math.floor(inMs / 60000);
-  const endMin = Math.floor(outMs / 60000);
-
-  for (let m = startMin; m < endMin; m++) {
-    const hour = getJstHour(new Date(m * 60000));
-    if (hour >= 22 || hour < 5) {
-      total++;
-    }
+  // Check late-night windows for each day the shift spans.
+  // Late-night is 22:00-05:00 JST, which spans two calendar days:
+  //   - Evening window: day D 22:00 (D*1440+1320) to day D+1 00:00 (D*1440+1440)
+  //   - Morning window: day D 00:00 (D*1440+0) to day D 05:00 (D*1440+300)
+  for (let d = startDay; d <= endDay + 1; d++) {
+    const dayBase = d * MINUTES_PER_DAY;
+    // Morning: 00:00-05:00 JST
+    total += overlapMinutes(inJstMin, outJstMin, dayBase, dayBase + 300);
+    // Evening: 22:00-24:00 JST
+    total += overlapMinutes(inJstMin, outJstMin, dayBase + 1320, dayBase + MINUTES_PER_DAY);
   }
 
   return total;
