@@ -29,7 +29,7 @@ export default async function DashboardPage() {
   const [tenant, entry, history, myPendingCount, dailyReport] = await Promise.all([
     prisma.tenant.findUnique({
       where: { id: tenantId },
-      select: { plan: true, trialEndsAt: true },
+      select: { plan: true, trialEndsAt: true, faceAuthEnabled: true },
     }),
     prisma.timeEntry.findUnique({
       where: { tenantId_userId_date: { tenantId, userId, date: today } },
@@ -194,6 +194,14 @@ export default async function DashboardPage() {
             あなたの未処理申請: <span className="badge badge-pending">{myPendingCount} 件</span>
           </p>
         </section>
+
+        {/* Face registration link */}
+        {tenant?.faceAuthEnabled && (
+          <section>
+            <h2 style={{ marginBottom: 8 }}>顔認証</h2>
+            <Link href="/dashboard/face-register">顔データを登録・管理 →</Link>
+          </section>
+        )}
       </main>
     </>
   );

@@ -9,6 +9,7 @@ import { startOfJstDay } from "@/lib/time";
 import { ClosePanel } from "../dashboard/ClosePanel";
 import { Logo } from "../Logo";
 import { AdminCorrections } from "./AdminCorrections";
+import { FaceAuthToggle } from "./FaceAuthToggle";
 import { AdminDailyReports } from "./AdminDailyReports";
 import { ExportPanel } from "./ExportPanel";
 
@@ -38,7 +39,7 @@ export default async function AdminPage() {
     await Promise.all([
       prisma.tenant.findUnique({
         where: { id: tenantId },
-        select: { plan: true, trialEndsAt: true },
+        select: { plan: true, trialEndsAt: true, faceAuthEnabled: true, slug: true },
       }),
       role === "ADMIN"
         ? prisma.close.findUnique({
@@ -198,6 +199,14 @@ export default async function AdminPage() {
 
         {/* Submitted daily reports */}
         <AdminDailyReports items={dailyReportsUi} />
+
+        {/* Face auth toggle (ADMIN only) */}
+        {role === "ADMIN" && tenant && (
+          <FaceAuthToggle
+            enabled={tenant.faceAuthEnabled}
+            kioskUrl={`/kiosk/${tenant.slug}`}
+          />
+        )}
       </main>
     </>
   );

@@ -44,6 +44,7 @@ model User {
   closesClosedBy Close[] @relation("CloseClosedBy")
   auditLogsAsActor AuditLog[] @relation("AuditLogActor")
   passwordResetTokens PasswordResetToken[]
+  faceDescriptors FaceDescriptor[]
 
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -100,6 +101,7 @@ model Tenant {
   trialEndsAt           DateTime?
   stripeCustomerId      String?    @unique
   stripeSubscriptionId  String?
+  faceAuthEnabled       Boolean    @default(false)
   createdAt             DateTime   @default(now())
   updatedAt             DateTime   @updatedAt
 
@@ -118,6 +120,7 @@ model Tenant {
   payrollConfigs PayrollConfig[]
   monthlyPayrolls MonthlyPayroll[]
   tenantHolidays TenantHoliday[]
+  faceDescriptors FaceDescriptor[]
 
   @@index([name])
 }
@@ -260,6 +263,8 @@ model LeaveRequest {
   userId         String
 
   type           LeaveType
+  halfType       HalfDayType?  // AM or PM (only when type=HALF)
+  hours          Float?        // hours taken (only when type=HOURLY)
   startAt        DateTime
   endAt          DateTime
   reason         String?
@@ -423,6 +428,23 @@ model MonthlyPayroll {
   @@index([tenantId, month])
 }
 
+// --- Face authentication (顔認証) ---
+model FaceDescriptor {
+  id         String   @id @default(cuid())
+  tenantId   String
+  userId     String
+  descriptor String   @db.Text // JSON array of 128 floats (face-api.js descriptor)
+  label      String?  // optional label like "正面", "左向き"
+
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([tenantId, userId])
+}
+
 // --- Company custom holidays (会社休業日) ---
 model TenantHoliday {
   id        String   @id @default(cuid())
@@ -478,10 +500,15 @@ enum ReportStatus {
 }
 
 enum LeaveType {
-  PAID
-  HALF
-  HOURLY
-  ABSENCE
+  PAID       // 全日有給
+  HALF       // 半日有給 (午前 or 午後)
+  HOURLY     // 時間単位有給
+  ABSENCE    // 欠勤
+}
+
+enum HalfDayType {
+  AM  // 午前休
+  PM  // 午後休
 }
 
 enum LeaveRequestStatus {
