@@ -16,381 +16,479 @@
 
 ---
 
-## Overview
+## 目次
 
-従業員の出退勤・休憩打刻、日報提出、勤怠修正申請、月次締め、CSVエクスポートを備えた SaaS 型 Web アプリです。
-テナント（会社）ごとにデータを完全分離し、セルフ登録 → トライアル → Stripe 課金 → 本番運用の流れを提供します。
+1. [概要](#概要)
+2. [機能一覧](#機能一覧)
+3. [Tech Stack](#tech-stack)
+4. [ローカルセットアップ](#ローカルセットアップ)
+5. [本番デプロイ](#本番デプロイ)
+6. [環境変数リファレンス](#環境変数リファレンス)
+7. [Stripe 課金セットアップ](#stripe-課金セットアップ)
+8. [運用マニュアル](#運用マニュアル)
+9. [API リファレンス](#api-リファレンス)
+10. [データベース](#データベース)
+11. [プロジェクト構成](#プロジェクト構成)
+12. [スクリプト一覧](#スクリプト一覧)
 
-### 主な機能
+---
 
-| カテゴリ | 機能 | 説明 |
-|---------|------|------|
-| **勤怠** | 打刻 | 出勤 / 休憩開始 / 休憩終了 / 退勤をワンクリックで記録 |
-| | 勤怠履歴 | 直近 7 日間の打刻データを一覧表示 |
-| | 修正申請 | 従業員が時刻の修正を申請 → 管理者/承認者が承認・却下 |
-| | 月次締め | 管理者が当月の勤怠データをロックし編集を防止 |
-| | CSVエクスポート | 勤怠・日報データを月指定で CSV ダウンロード（BOM付きUTF-8） |
-| **日報** | 日報作成 | ルート・対応件数・インシデント等を入力し、下書き保存または提出 |
-| **SaaS** | セルフ登録 | 会社が自分で登録 → 30日トライアル開始 |
-| | Stripe 課金 | Checkout / Webhook / Billing Portal による自動課金管理 |
-| | アカウント停止 | SUSPENDED プランのテナントは自動的に機能ブロック |
-| | パスワードリセット | メール経由のセルフサービスリセット |
-| **管理** | メンバー管理 | ADMIN がメンバーの追加・退社・ロール変更を実行 |
-| | 監査ログ | 全操作（メンバー追加・権限変更・プラン変更等）を記録 + 閲覧 UI |
-| | Super Admin | 全テナントの KPI ダッシュボード・プラン変更・監査ログ閲覧 |
-| **その他** | マルチテナント | テナント単位でデータを完全分離 |
-| | PWA | スマートフォンのホーム画面に追加してスタンドアロン起動 |
+## 概要
 
-### ロール
+Workforce Nexus は、従業員の出退勤・休憩打刻、日報提出、勤怠修正申請、月次締め、CSV エクスポートを備えた SaaS 型勤怠管理 Web アプリです。
+
+テナント（会社）ごとにデータを完全分離し、**セルフ登録 → 30日トライアル → Stripe 決済 → 本番運用** の流れを提供します。
+SUSPENDED（停止）テナントはページ表示・API 呼び出しの両方がブロックされます。
+
+---
+
+## 機能一覧
+
+### 勤怠管理
+
+| 機能 | 説明 |
+|------|------|
+| 打刻 | 出勤 / 休憩開始 / 休憩終了 / 退勤をワンタップで記録 |
+| 勤怠履歴 | 直近 7 日間の打刻データを一覧表示 |
+| 修正申請 | 従業員が時刻修正を申請 → ADMIN/APPROVER が承認・却下 |
+| 月次締め | ADMIN が当月をロックし打刻・修正を防止 |
+| CSV エクスポート | 勤怠・日報を月指定で CSV ダウンロード (BOM 付き UTF-8) |
+| 日報 | ルート・対応件数・インシデント等を下書き保存 or 提出 |
+
+### SaaS 基盤
+
+| 機能 | 説明 |
+|------|------|
+| セルフ登録 | `/register` から会社登録 → 30日トライアル自動開始 |
+| Stripe 課金 | Checkout → Webhook → ACTIVE 自動切替 / 支払い失敗 → SUSPENDED |
+| Billing Portal | カード変更・プラン解約を Stripe UI で管理 |
+| アカウント停止 | SUSPENDED テナントはページ + API の両方をブロック |
+| パスワードリセット | メール経由のセルフサービスリセット (1 時間有効トークン) |
+
+### 管理機能
+
+| 機能 | 説明 |
+|------|------|
+| メンバー管理 | ADMIN がメンバーの追加・退社・復帰・ロール変更 |
+| 監査ログ | 全操作を before/after JSON 付きで記録 + 閲覧 UI |
+| KPI ダッシュボード | Super Admin 向け: テナント数・ユーザー数・アクティブ数・グラフ |
+
+### ロールと権限
 
 | ロール | 打刻 | 日報 | 修正申請 | 承認/却下 | CSV | 月次締め | メンバー管理 | 課金管理 | 全テナント管理 |
-|--------|------|------|----------|----------|-----|---------|------------|----------|--------------|
-| `EMPLOYEE` | o | o | o | x | x | x | x | x | x |
-| `APPROVER` | o | o | o | o | o | x | x | x | x |
-| `ADMIN` | o | o | o | o | o | o | o | o | x |
-| `SUPER_ADMIN` | — | — | — | — | — | — | — | — | o |
+|--------|:----:|:----:|:--------:|:---------:|:---:|:-------:|:----------:|:--------:|:------------:|
+| EMPLOYEE | o | o | o | - | - | - | - | - | - |
+| APPROVER | o | o | o | o | o | - | - | - | - |
+| ADMIN | o | o | o | o | o | o | o | o | - |
+| SUPER_ADMIN | - | - | - | - | - | - | - | - | o |
 
 ---
 
 ## Tech Stack
 
-```
-Frontend :  Next.js 16 (App Router / Turbopack) / React 19 / TypeScript 5
-Backend  :  Next.js API Routes
-DB       :  PostgreSQL + Prisma ORM 6
-Auth     :  NextAuth.js v5 (JWT + Credentials)
-Billing  :  Stripe (Checkout / Webhooks / Billing Portal)
-Charts   :  Recharts
-Validate :  Zod 4
-Test     :  Vitest
-Email    :  Resend (optional)
-Style    :  グローバル CSS (ライト/ダークモード自動切替)
-PWA      :  Web App Manifest (standalone)
-Deploy   :  Vercel
-```
+| レイヤー | 技術 |
+|---------|------|
+| フロントエンド | Next.js 16 (App Router / Turbopack) / React 19 / TypeScript 5 |
+| バックエンド | Next.js API Routes (Server Components + Route Handlers) |
+| データベース | PostgreSQL + Prisma ORM 6 |
+| 認証 | NextAuth.js v5 (JWT + Credentials) |
+| 課金 | Stripe (Checkout / Webhooks / Billing Portal) |
+| チャート | Recharts |
+| バリデーション | Zod 4 |
+| テスト | Vitest |
+| メール | Resend (任意) |
+| スタイル | グローバル CSS (ライト/ダークモード自動切替) |
+| PWA | Web App Manifest (standalone) |
+| デプロイ | Vercel |
+| CI | GitHub Actions (lint / type-check / test / build) |
 
 ---
 
-## Quick Start
+## ローカルセットアップ
 
-ターミナルで以下をコピー＆ペーストすれば、そのまま起動できます。
+### 前提条件
+
+- **Node.js 20+**
+- **PostgreSQL** (ローカルまたはクラウド。[Neon](https://neon.tech) の無料プランでも OK)
+
+### 手順
 
 ```bash
-# 1. クローン＆インストール
+# 1. クローン & インストール
 git clone https://github.com/nexus-core-jp/workforce-app.git
 cd workforce-app
 npm install
 
-# 2. 環境変数を設定（DATABASE_URL だけ書き換えてください）
+# 2. 環境変数を設定
 cp .env.example .env
+# AUTH_SECRET を自動生成
 sed -i '' "s|AUTH_SECRET=.*|AUTH_SECRET=\"$(openssl rand -base64 32)\"|" .env
-# ↑ AUTH_SECRET は自動生成されます
-# ↓ DATABASE_URL は .env を開いて自分の PostgreSQL 接続文字列に書き換えてください
-#   例: DATABASE_URL="postgresql://user:pass@localhost:5432/workforce_app"
+```
 
-# 3. DB セットアップ＆デモデータ投入（一括実行）
+`.env` を開いて `DATABASE_URL` を自分の PostgreSQL 接続文字列に書き換えてください。
+
+```env
+DATABASE_URL="postgresql://user:password@localhost:5432/workforce_app"
+```
+
+> Neon を使う場合: `DATABASE_URL="postgresql://user:pass@ep-xxx.region.aws.neon.tech/neondb?sslmode=require"`
+
+```bash
+# 3. DB セットアップ & デモデータ投入
 npx prisma generate && npx prisma migrate deploy && npm run db:seed
 
-# 4. 起動！
+# 4. 起動
 npm run dev
 ```
 
 **http://localhost:3002** を開いてログインしてください。
 
-> **補足:** Stripe 課金やメール送信は任意です。`.env` の `STRIPE_*` / `RESEND_*` を空のままにしておけばスキップされます。
+### デモアカウント
+
+シード実行後、以下のアカウントでログインできます。
+ログイン画面では **会社ID**・**メールアドレス**・**パスワード** の 3 つを入力します。
+
+| ロール | 会社 ID | メール | パスワード | ログイン後の画面 |
+|--------|---------|--------|-----------|----------------|
+| Super Admin | `__platform` | `super@platform.local` | `superadmin123` | `/super-admin` |
+| 管理者 (ADMIN) | `demo` | `admin@demo.local` | `password123` | `/admin` |
+| 従業員 (EMPLOYEE) | `demo` | `tanaka@demo.local` | `password123` | `/dashboard` |
+| 承認者 (APPROVER) | `demo` | `suzuki@demo.local` | `password123` | `/dashboard` |
+
+> Stripe / Resend は任意です。`.env` の `STRIPE_*` / `RESEND_*` を空のままにすればスキップされます。
 
 ---
 
-## デモログイン
+## 本番デプロイ
 
-シード実行後、以下の 4 アカウントでログインできます。
-ログイン画面では **会社ID (テナント)**・**メールアドレス**・**パスワード** の 3 項目を入力します。
+### 方法 1: Vercel + Neon (推奨)
 
-| ロール | 会社ID | メール | パスワード |
-|--------|--------|--------|-----------|
-| Super Admin | `__platform` | `super@platform.local` | `superadmin123` |
-| 管理者 (ADMIN) | `demo` | `admin@demo.local` | `password123` |
-| 従業員 (EMPLOYEE) | `demo` | `tanaka@demo.local` | `password123` |
-| 承認者 (APPROVER) | `demo` | `suzuki@demo.local` | `password123` |
+最も簡単な構成です。どちらも無料プランがあります。
 
-> **Super Admin** → `/super-admin` で全テナントの KPI・監査ログ・プラン管理。
-> **管理者** → `/admin` でメンバー管理・課金・監査ログ・CSV エクスポート。
-> **従業員** → `/dashboard` で打刻・日報・修正申請。
+#### Step 1: Neon でデータベースを作成
+
+1. [neon.tech](https://neon.tech) でアカウント作成
+2. 新しいプロジェクトを作成 (リージョン: `ap-southeast-1` 推奨)
+3. 接続文字列をコピー:
+   ```
+   postgresql://user:pass@ep-xxx.region.aws.neon.tech/neondb?sslmode=require
+   ```
+
+#### Step 2: Vercel にデプロイ
+
+1. [vercel.com](https://vercel.com) でリポジトリをインポート
+2. **Environment Variables** に以下を設定:
+
+   | 変数 | 値 |
+   |------|-----|
+   | `DATABASE_URL` | Neon の接続文字列 |
+   | `AUTH_SECRET` | `openssl rand -base64 32` で生成した文字列 |
+   | `AUTH_URL` | Vercel のデプロイ URL (例: `https://your-app.vercel.app`) |
+
+3. **Deploy** をクリック
+
+> Build Command はデフォルトのまま。`postinstall` で `prisma generate` が自動実行されます。
+
+#### Step 3: DB マイグレーション & シード
+
+デプロイ後、ローカルから実行します。
+
+```bash
+# .env の DATABASE_URL を Neon の接続文字列に設定した状態で:
+npx prisma migrate deploy
+npm run db:seed
+```
+
+これで本番環境にテーブルとデモデータが作成されます。
+
+#### Step 4 (任意): カスタムドメイン
+
+1. Vercel ダッシュボード → Settings → Domains
+2. ドメインを追加し、DNS レコードを設定
+3. `AUTH_URL` を新しいドメインに更新
+
+### 方法 2: セルフホスト (VPS / Docker)
+
+```bash
+# ビルド
+npm run build
+
+# 起動 (port 3002)
+npm start
+```
+
+Node.js 20+ と PostgreSQL が必要です。
+リバースプロキシ (nginx / Caddy) で HTTPS を設定してください。
+
+### 方法 3: Railway / Render
+
+1. リポジトリを接続
+2. 環境変数を設定 (`DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL`)
+3. Build Command: `npm run build`
+4. Start Command: `npm start`
 
 ---
 
-## 使い方
+## 環境変数リファレンス
 
-### 打刻の流れ
+| 変数 | 必須 | 説明 | 例 |
+|------|:----:|------|-----|
+| `DATABASE_URL` | **必須** | PostgreSQL 接続文字列 | `postgresql://user:pass@host:5432/db` |
+| `AUTH_SECRET` | **必須** | NextAuth 署名キー (32 文字以上) | `openssl rand -base64 32` で生成 |
+| `AUTH_URL` | **必須** | アプリの公開 URL | `https://your-app.vercel.app` |
+| `RESEND_API_KEY` | 任意 | Resend API キー (PW リセットメール用) | `re_xxxx` |
+| `NOTIFICATION_EMAIL` | 任意 | 新規登録通知の送信先メール | `admin@example.com` |
+| `STRIPE_SECRET_KEY` | 任意 | Stripe シークレットキー | `sk_live_xxxx` |
+| `STRIPE_WEBHOOK_SECRET` | 任意 | Stripe Webhook 署名シークレット | `whsec_xxxx` |
+| `STRIPE_PRICE_ID` | 任意 | Stripe サブスクリプション価格 ID | `price_xxxx` |
+
+> `STRIPE_*` を設定しない場合、課金ボタンは「Stripe is not configured」エラーを返します。課金なしでも勤怠機能は使えます。
+
+---
+
+## Stripe 課金セットアップ
+
+### 1. Stripe アカウント準備
+
+1. [stripe.com](https://stripe.com) でアカウント作成
+2. ダッシュボード → **Products** → 商品を作成 (例: "Workforce Nexus Pro")
+3. 価格を追加 (例: 月額 ¥3,000)。作成後の `price_xxxx` を控える
+
+### 2. 環境変数を設定
+
+```env
+STRIPE_SECRET_KEY="sk_test_xxxx"       # Stripe ダッシュボード → API keys
+STRIPE_PRICE_ID="price_xxxx"           # 上で作成した価格 ID
+```
+
+### 3. Webhook を設定
+
+#### ローカル開発
+
+```bash
+# Stripe CLI をインストール
+brew install stripe/stripe-cli/stripe
+stripe login
+
+# Webhook をローカルに転送
+stripe listen --forward-to localhost:3002/api/stripe/webhook
+```
+
+表示される `whsec_xxxx` を `.env` に設定:
+
+```env
+STRIPE_WEBHOOK_SECRET="whsec_xxxx"
+```
+
+#### 本番環境
+
+1. Stripe ダッシュボード → **Webhooks** → **Add endpoint**
+2. URL: `https://your-app.vercel.app/api/stripe/webhook`
+3. イベントを選択:
+   - `checkout.session.completed`
+   - `invoice.payment_failed`
+   - `customer.subscription.deleted`
+4. 作成後に表示される Signing secret を `STRIPE_WEBHOOK_SECRET` に設定
+
+### 4. Billing Portal を有効化
+
+1. Stripe ダッシュボード → **Settings** → **Billing** → **Customer portal**
+2. ポータルリンクを有効化
+3. 顧客がカード変更・プラン解約を自分で行えるようになります
+
+### 課金フロー
+
+```
+[TRIAL] → 管理者が「アップグレード」クリック
+       → Stripe Checkout で決済
+       → Webhook: checkout.session.completed
+       → プラン自動切替: ACTIVE
+
+[ACTIVE] → 支払い失敗
+         → Webhook: invoice.payment_failed
+         → プラン自動切替: SUSPENDED
+         → テナント全体の機能ブロック
+
+[SUSPENDED] → 管理者が「再サブスクライブ」クリック
+            → Stripe Checkout で再決済
+            → プラン自動切替: ACTIVE
+```
+
+---
+
+## 運用マニュアル
+
+### テナントのライフサイクル
+
+```
+登録 → TRIAL (30日) → ACTIVE (課金中) → SUSPENDED (停止) → ACTIVE (復帰)
+```
+
+| 状態 | 条件 | ユーザーへの影響 |
+|------|------|-----------------|
+| TRIAL | 登録直後。30日間 | 全機能利用可能。バナーで残り日数を表示 |
+| ACTIVE | Stripe 決済完了 | 全機能利用可能 |
+| SUSPENDED | 支払い失敗 or SA が手動停止 | ページ → `/suspended` にリダイレクト。API → 403 |
+
+### Super Admin (SA) の操作
+
+SA は `__platform` テナントの `SUPER_ADMIN` ロールのユーザーです。
+
+#### SA ダッシュボード (`/super-admin`)
+
+- **KPI カード**: 導入企業数 / 総ユーザー数 / 本日アクティブ / トライアル期限 7 日以内
+- **KPI グラフ**: 月別新規登録 (棒) / プラン分布 (円) / 日別アクティブ (折れ線)
+- **テナント一覧**: プラン・トライアル残日数・メンバー数を表示
+
+#### プラン変更
+
+1. `/super-admin` → テナント名をクリック
+2. プルダウンで `TRIAL` / `ACTIVE` / `SUSPENDED` を選択
+3. 「変更」ボタンで即時反映。監査ログに自動記録
+
+> **注意**: プラン変更はデータベースに即時反映されますが、対象テナントのユーザーが現在ログイン中の場合、JWT の有効期限が切れるまで旧プランのまま動作する場合があります。即座に反映するにはユーザーの再ログインが必要です。
+
+#### 監査ログ (`/super-admin/audit-logs`)
+
+全テナント横断で操作履歴を閲覧できます。
+
+- **フィルタ**: テナント / アクション種別 / 日付範囲
+- **ページネーション**: 20 件/ページ
+- 記録されるアクション: `TENANT_REGISTERED`, `MEMBER_ADDED`, `MEMBER_DEACTIVATED`, `MEMBER_REACTIVATED`, `ROLE_CHANGED`, `PASSWORD_RESET`, `PLAN_CHANGED`, `MONTH_CLOSED`, `CORRECTION_APPROVED`, `CORRECTION_REJECTED`, `STRIPE_CHECKOUT_COMPLETED`, `STRIPE_PAYMENT_FAILED`, `STRIPE_SUBSCRIPTION_DELETED`
+
+### テナント管理者 (ADMIN) の操作
+
+#### メンバー管理 (`/admin/members`)
+
+| 操作 | 手順 |
+|------|------|
+| メンバー追加 | 名前・メール・パスワード・ロールを入力して「追加」 |
+| 退社処理 | メンバー一覧の「退社」ボタン (ログイン不可になる) |
+| 復帰 | 「復帰」ボタンで再度有効化 |
+| ロール変更 | プルダウンでロール選択 → 「変更」 |
+
+#### 月次締め (`/admin`)
+
+1. 管理者ダッシュボードの「今月を締める」ボタンをクリック
+2. 当月の打刻・修正申請がロックされ、編集不可になる
+3. 締め済みの月の日報も編集不可
+
+#### CSV エクスポート (`/admin`)
+
+1. 「CSV エクスポート」セクションで年月を選択
+2. 「勤怠 CSV」または「日報 CSV」をクリック
+3. BOM 付き UTF-8 で出力。Excel でそのまま文字化けなく開けます
+
+#### 課金管理 (`/admin/billing`)
+
+- **TRIAL**: 「有料プランにアップグレード」→ Stripe Checkout
+- **ACTIVE**: 「支払い管理 (Stripe)」→ Stripe Billing Portal (カード変更・解約)
+- **SUSPENDED**: 「再サブスクライブ」→ Stripe Checkout で再決済
+
+#### テナント監査ログ (`/admin/audit-logs`)
+
+自テナントの操作履歴を閲覧。フィルタ・ページネーション対応。
+
+### 一般ユーザーの操作
+
+#### 打刻 (`/dashboard`)
 
 ```
 出勤 → (業務) → 休憩開始 → 休憩終了 → (業務) → 退勤
 ```
 
-- ダッシュボード上のボタンで打刻します
-- 状態に応じてボタンが有効/無効になります（ステートマシン制御）
-- 労働時間は `(退勤 - 出勤) - 休憩時間` で自動計算されます
+ボタンは状態に応じて有効/無効が切り替わります (ステートマシン制御)。
+労働時間は `(退勤 - 出勤) - 休憩時間` で自動計算されます。
 
-### 日報
+#### 日報
 
-1. ダッシュボードまたは `/daily-reports/new` から日報を作成
+1. ダッシュボードの「日報を書く」から作成
 2. ルート・対応件数・勤務時間・インシデント・備考・連絡事項を入力
-3. 「下書き保存」で一時保存、「提出」で提出済みに変更
-4. 提出された日報は管理者画面 `/admin` に一覧表示されます
+3. 「下書き保存」で一時保存、「提出」で確定
 
-### 修正申請
+#### 修正申請
 
 1. 履歴一覧から「修正申請」をクリック
-2. 修正したい時刻を入力し、理由を記入して申請
-3. ADMIN / APPROVER が承認すると TimeEntry に自動反映
+2. 修正したい時刻を入力 + 理由を記入して申請
+3. ADMIN / APPROVER が承認すると勤怠データに自動反映
 
-### CSVエクスポート
-
-1. 管理者画面 `/admin` の「CSVエクスポート」セクションで対象月を選択
-2. 「勤怠CSV」または「日報CSV」ボタンをクリックしてダウンロード
-3. BOM付き UTF-8 で出力されるため、Excel で文字化けなく開けます
-
-### 月次締め
-
-- ADMIN が「今月を締める」を実行すると、当月の打刻・修正申請がロックされます
-
-### パスワードリセット
+#### パスワードリセット
 
 1. ログイン画面の「パスワードをお忘れですか？」をクリック
-2. 会社ID + メールアドレスを入力 → リセットリンクがメールで届く
-3. リンクから新しいパスワードを設定
+2. 会社 ID + メールアドレスを入力
+3. リセットリンクがメールで届く (有効期限 1 時間)
+4. リンクから新しいパスワードを設定
 
-### Stripe 課金
+> メール送信には `RESEND_API_KEY` の設定が必要です。
 
-1. 管理者が `/admin/billing` で「有料プランにアップグレード」をクリック
-2. Stripe Checkout で決済 → 自動的に ACTIVE プランに切替
-3. 支払い失敗時は自動で SUSPENDED → 機能がブロックされる
-4. 「支払い管理」から Stripe Billing Portal でカード変更・解約が可能
+### トラブルシューティング
 
----
-
-## Scripts
-
-| コマンド | 説明 |
-|---------|------|
-| `npm run dev` | 開発サーバー (port 3002) |
-| `npm run build` | プロダクションビルド |
-| `npm start` | プロダクションサーバー (port 3002) |
-| `npm run lint` | ESLint |
-| `npm test` | テスト実行 |
-| `npm run test:watch` | テスト (watch) |
-| `npm run prisma:generate` | Prisma クライアント生成 |
-| `npm run prisma:migrate` | マイグレーション実行 |
-| `npm run prisma:studio` | DB GUI (Prisma Studio) |
-| `npm run db:seed` | デモデータ投入 |
+| 症状 | 原因 | 対処法 |
+|------|------|--------|
+| ログインできない | 会社 ID / メール / パスワードが間違い | 3 項目全て確認。退社済み (active=false) ユーザーはログイン不可 |
+| 「アカウントが停止されています」 | テナントが SUSPENDED | SA にプラン復帰を依頼 or `/admin/billing` で再サブスクライブ |
+| パスワードリセットメールが届かない | `RESEND_API_KEY` 未設定 or メールドメイン未認証 | `.env` の設定を確認。Resend で送信元ドメインを認証 |
+| Stripe 決済後もプランが TRIAL のまま | Webhook が届いていない | Stripe ダッシュボードの Webhooks ログを確認。`STRIPE_WEBHOOK_SECRET` を確認 |
+| 打刻ボタンが押せない | 月が締め済み or 既にその状態 | 管理者に締め解除を依頼。or ステートマシンの順序を確認 |
+| CSV が文字化けする | Excel の読み込み設定 | BOM 付き UTF-8 で出力されているので通常は問題なし。古い Excel では「データの取得」→「テキスト/CSV」を使用 |
 
 ---
 
-## Project Structure
+## API リファレンス
 
-```
-workforce-app/
-├── src/
-│   ├── auth.ts                          NextAuth 設定 (JWT + Credentials)
-│   ├── middleware.ts                    SUSPENDED プラン強制リダイレクト
-│   ├── app/
-│   │   ├── layout.tsx                   ルートレイアウト
-│   │   ├── page.tsx                     ルートページ (リダイレクト)
-│   │   ├── globals.css                  グローバルスタイル (ダークモード対応)
-│   │   ├── Logo.tsx                     ブランドロゴコンポーネント
-│   │   │
-│   │   ├── login/                       ログイン画面
-│   │   ├── register/                    新規会社登録 (セルフサービス)
-│   │   ├── forgot-password/             パスワードリセット申請
-│   │   ├── reset-password/              パスワード再設定
-│   │   ├── suspended/                   アカウント停止ページ
-│   │   │
-│   │   ├── dashboard/                   従業員ダッシュボード
-│   │   │   ├── page.tsx                 メイン画面 (SSR)
-│   │   │   ├── TimeClock.tsx            打刻コンポーネント
-│   │   │   ├── History.tsx              打刻履歴
-│   │   │   ├── DailyReportPanel.tsx     日報パネル
-│   │   │   ├── ClosePanel.tsx           月次締めパネル
-│   │   │   └── CorrectionsPanel.tsx     修正申請パネル
-│   │   │
-│   │   ├── admin/                       テナント管理者画面
-│   │   │   ├── page.tsx                 管理者ダッシュボード (SSR)
-│   │   │   ├── AdminCorrections.tsx     修正申請一覧 (承認/却下)
-│   │   │   ├── AdminDailyReports.tsx    日報一覧
-│   │   │   ├── ExportPanel.tsx          CSVエクスポート
-│   │   │   ├── members/                 メンバー管理 (追加/退社/ロール変更)
-│   │   │   ├── billing/                 課金管理 (Stripe Checkout/Portal)
-│   │   │   └── audit-logs/              テナント監査ログ閲覧
-│   │   │
-│   │   ├── super-admin/                 Super Admin 画面
-│   │   │   ├── page.tsx                 KPI ダッシュボード + テナント一覧
-│   │   │   ├── KpiCards.tsx             KPI サマリーカード (4種)
-│   │   │   ├── KpiCharts.tsx            KPI グラフ (recharts: 棒/円/折れ線)
-│   │   │   ├── tenants/[id]/            テナント詳細 + プラン変更
-│   │   │   └── audit-logs/              全テナント横断 監査ログ閲覧
-│   │   │
-│   │   ├── daily-reports/new/           日報作成画面
-│   │   ├── corrections/new/             修正申請画面
-│   │   │
-│   │   └── api/
-│   │       ├── auth/[...nextauth]/      NextAuth エンドポイント
-│   │       ├── auth/forgot-password/    POST  パスワードリセット申請
-│   │       ├── auth/reset-password/     POST  パスワード変更
-│   │       ├── register/                POST  新規会社登録
-│   │       ├── time-entry/punch/        POST  打刻
-│   │       ├── daily-reports/           GET/POST  日報
-│   │       ├── attendance-corrections/  POST  修正申請
-│   │       ├── attendance-corrections/decide/  POST  承認・却下
-│   │       ├── close/                   POST  月次締め
-│   │       ├── admin/export/            GET   CSVエクスポート
-│   │       ├── admin/members/           POST/PATCH  メンバー管理
-│   │       ├── stripe/checkout/         POST  Stripe Checkout Session 作成
-│   │       ├── stripe/webhook/          POST  Stripe Webhook 受信
-│   │       ├── stripe/portal/           POST  Stripe Billing Portal
-│   │       └── super-admin/tenants/[id]/plan/  POST  プラン変更
-│   │
-│   ├── lib/
-│   │   ├── db.ts                        Prisma シングルトン
-│   │   ├── stripe.ts                    Stripe クライアント (lazy init)
-│   │   ├── email.ts                     メール送信 (Resend)
-│   │   ├── session.ts                   セッション型定義 & パーサー
-│   │   ├── jst.ts                       JST タイムゾーン処理
-│   │   ├── time.ts                      時刻ユーティリティ
-│   │   ├── close.ts                     月次締め判定
-│   │   └── csv.ts                       CSV 生成ヘルパー (BOM付きUTF-8)
-│   │
-│   ├── generated/prisma/                Prisma 生成ファイル
-│   └── __tests__/                       ユニットテスト
-│
-├── prisma/
-│   ├── schema.prisma                    データベーススキーマ (14 モデル)
-│   ├── seed.ts                          デモデータ投入
-│   └── migrations/                      マイグレーション履歴
-│
-├── public/
-│   ├── manifest.json                    PWA マニフェスト
-│   ├── icon-192.png
-│   └── icon-512.png
-│
-├── .env.example
-├── package.json
-├── tsconfig.json
-├── next.config.ts
-├── eslint.config.mjs
-├── prisma.config.ts
-└── vitest.config.ts
-```
+### 認証
 
----
-
-## API Reference
-
-### 認証・登録
-
-#### `POST /api/register`
-新規会社登録。30日間のトライアルが開始されます。
-```json
-{ "companyName": "会社名", "slug": "company-id", "adminName": "管理者名", "email": "admin@example.com", "password": "password123" }
-```
-
-#### `POST /api/auth/forgot-password`
-パスワードリセットトークンを発行しメール送信。ユーザー不在でも 200 を返します。
-```json
-{ "tenant": "company-id", "email": "user@example.com" }
-```
-
-#### `POST /api/auth/reset-password`
-トークン検証後にパスワードを変更。
-```json
-{ "token": "reset-token-uuid", "password": "newpassword123" }
-```
+| メソッド | エンドポイント | 説明 | 権限 |
+|---------|--------------|------|------|
+| POST | `/api/register` | 新規会社登録 | 不要 |
+| POST | `/api/auth/forgot-password` | パスワードリセット申請 | 不要 |
+| POST | `/api/auth/reset-password` | パスワード変更 | 不要 |
 
 ### 勤怠
 
-#### `POST /api/time-entry/punch`
-打刻を記録します。
-```json
-{ "action": "CLOCK_IN" | "BREAK_START" | "BREAK_END" | "CLOCK_OUT" }
-```
-
-#### `GET/POST /api/daily-reports`
-日報の取得・作成/更新を行います。
-```json
-{ "date": "2026-02-23", "route": "ルートA", "cases": 5, "workHoursText": "8時間", "incidentsText": "なし", "notesText": "特記なし", "announcementsText": "", "submit": true }
-```
-
-#### `POST /api/attendance-corrections`
-修正申請を作成します。
-```json
-{ "date": "2026-02-23", "requestedClockInAt": "2026-02-23T00:00:00Z", "requestedClockOutAt": "2026-02-23T09:00:00Z", "reason": "打刻忘れ" }
-```
-
-#### `POST /api/attendance-corrections/decide`
-修正申請を承認・却下します。(ADMIN / APPROVER のみ)
-```json
-{ "id": "<correctionId>", "decision": "APPROVED" | "REJECTED" }
-```
-
-#### `POST /api/close`
-当月を締めます。(ADMIN のみ)
-```json
-{ "month": "2026-02" }
-```
-
-#### `GET /api/admin/export`
-勤怠・日報データを CSV ダウンロード。(ADMIN / APPROVER のみ)
-```
-GET /api/admin/export?type=attendance&month=2026-02
-GET /api/admin/export?type=daily-reports&month=2026-02
-```
+| メソッド | エンドポイント | 説明 | 権限 |
+|---------|--------------|------|------|
+| POST | `/api/time-entry/punch` | 打刻 (CLOCK_IN / BREAK_START / BREAK_END / CLOCK_OUT) | ログイン |
+| GET/POST | `/api/daily-reports` | 日報の取得・作成/更新 | ログイン |
+| POST | `/api/attendance-corrections` | 修正申請の作成 | ログイン |
+| POST | `/api/attendance-corrections/decide` | 修正申請の承認・却下 | ADMIN / APPROVER |
+| POST | `/api/close` | 月次締め | ADMIN |
+| GET | `/api/admin/export` | CSV エクスポート | ADMIN / APPROVER |
 
 ### メンバー管理
 
-#### `POST /api/admin/members`
-メンバーを追加します。(ADMIN のみ)
-```json
-{ "name": "新メンバー", "email": "new@example.com", "password": "password123", "role": "EMPLOYEE" }
-```
+| メソッド | エンドポイント | 説明 | 権限 |
+|---------|--------------|------|------|
+| POST | `/api/admin/members` | メンバー追加 | ADMIN |
+| PATCH | `/api/admin/members` | 退社・復帰・ロール変更 | ADMIN |
 
-#### `PATCH /api/admin/members`
-メンバーの退社・復帰・ロール変更。(ADMIN のみ)
-```json
-{ "userId": "<userId>", "action": "deactivate" | "reactivate" | "changeRole", "role": "APPROVER" }
-```
+### 課金 (Stripe)
 
-### Stripe 課金
-
-#### `POST /api/stripe/checkout`
-Stripe Checkout Session を作成し URL を返します。(ADMIN のみ)
-
-#### `POST /api/stripe/webhook`
-Stripe Webhook 受信。認証不要（Stripe 署名検証のみ）。
-- `checkout.session.completed` → plan = ACTIVE
-- `invoice.payment_failed` → plan = SUSPENDED
-- `customer.subscription.deleted` → plan = SUSPENDED
-
-#### `POST /api/stripe/portal`
-Stripe Billing Portal Session を作成し URL を返します。(ADMIN のみ)
+| メソッド | エンドポイント | 説明 | 権限 |
+|---------|--------------|------|------|
+| POST | `/api/stripe/checkout` | Checkout Session 作成 | ADMIN |
+| POST | `/api/stripe/webhook` | Webhook 受信 | Stripe 署名検証 |
+| POST | `/api/stripe/portal` | Billing Portal Session 作成 | ADMIN |
 
 ### Super Admin
 
-#### `POST /api/super-admin/tenants/[id]/plan`
-テナントのプランを変更します。(SUPER_ADMIN のみ)
-```json
-{ "plan": "TRIAL" | "ACTIVE" | "SUSPENDED" }
-```
+| メソッド | エンドポイント | 説明 | 権限 |
+|---------|--------------|------|------|
+| POST | `/api/super-admin/tenants/[id]/plan` | プラン変更 | SUPER_ADMIN |
+
+> 全ての data-mutating API は SUSPENDED テナントからの呼び出しを `403` で拒否します。
 
 ---
 
-## Database Schema
+## データベース
 
-### 主要モデル (14)
+### モデル一覧 (14)
 
 | モデル | 説明 |
 |--------|------|
-| `Tenant` | テナント (会社/組織) + Stripe 連携フィールド |
-| `User` | ユーザー (テナントごとにメール一意) |
-| `PasswordResetToken` | パスワードリセットトークン (1時間有効) |
+| `Tenant` | テナント (会社) + プラン + Stripe 連携 |
+| `User` | ユーザー (テナント内でメール一意) |
+| `PasswordResetToken` | パスワードリセットトークン (1 時間有効) |
 | `Department` | 部署 (承認者の指定可) |
 | `ShiftPattern` | シフトパターン (開始/終了時刻, 休憩時間) |
 | `ShiftAssignment` | ユーザーへのシフト割り当て |
@@ -401,50 +499,80 @@ Stripe Billing Portal Session を作成し URL を返します。(ADMIN のみ)
 | `LeaveLedgerEntry` | 有休残日数の台帳 |
 | `Close` | 月次締め記録 |
 | `AuditLog` | 監査ログ (before/after JSON 付き) |
+| `Account` / `Session` / `VerificationToken` | NextAuth 用テーブル |
 
 ### マルチテナント
 
-すべてのデータは `tenantId` で分離されます。クエリには必ず `tenantId` フィルタが含まれ、テナント間のデータ漏洩を防止します。
+全てのデータは `tenantId` で分離されます。クエリには必ず `tenantId` フィルタが含まれ、テナント間のデータ漏洩を防止します。
 
 ---
 
-## 環境変数
+## プロジェクト構成
 
-| 変数 | 必須 | 説明 |
-|------|------|------|
-| `DATABASE_URL` | o | PostgreSQL 接続文字列 |
-| `AUTH_SECRET` | o | NextAuth 署名キー (32文字以上) |
-| `AUTH_URL` | o | アプリの URL (例: `http://localhost:3002`) |
-| `RESEND_API_KEY` | | Resend API キー (メール送信用) |
-| `NOTIFICATION_EMAIL` | | 新規登録通知の送信先 |
-| `STRIPE_SECRET_KEY` | | Stripe シークレットキー |
-| `STRIPE_PUBLISHABLE_KEY` | | Stripe 公開キー |
-| `STRIPE_WEBHOOK_SECRET` | | Stripe Webhook 署名シークレット |
-| `STRIPE_PRICE_ID` | | Stripe サブスクリプション価格 ID |
-
----
-
-## Deploy
-
-### Vercel (推奨・現在稼働中)
-
-本番 URL: https://workforce-app-two.vercel.app
-
-1. リポジトリを Vercel に接続（GitHub 連携済み — main push で自動デプロイ）
-2. 環境変数を設定: `DATABASE_URL`, `AUTH_SECRET`, `AUTH_URL`
-3. Build Command はデフォルトのまま（`postinstall` で `prisma generate` が自動実行）
-
-### セルフホスト
-
-```bash
-npm run build
-npm start     # port 3002
+```
+workforce-app/
+├── src/
+│   ├── auth.ts                          NextAuth 設定 (JWT + Credentials)
+│   ├── middleware.ts                    SUSPENDED プラン強制リダイレクト
+│   ├── app/
+│   │   ├── layout.tsx                   ルートレイアウト
+│   │   ├── globals.css                  グローバルスタイル (ダークモード対応)
+│   │   ├── Logo.tsx                     ブランドロゴコンポーネント
+│   │   ├── login/                       ログイン
+│   │   ├── register/                    新規会社登録
+│   │   ├── forgot-password/             パスワードリセット申請
+│   │   ├── reset-password/              パスワード再設定
+│   │   ├── suspended/                   アカウント停止ページ
+│   │   ├── dashboard/                   従業員ダッシュボード
+│   │   ├── admin/                       テナント管理者画面
+│   │   │   ├── members/                 メンバー管理
+│   │   │   ├── billing/                 課金管理 (Stripe)
+│   │   │   └── audit-logs/              監査ログ
+│   │   ├── super-admin/                 Super Admin 画面
+│   │   │   ├── tenants/[id]/            テナント詳細
+│   │   │   └── audit-logs/              全テナント監査ログ
+│   │   ├── daily-reports/new/           日報作成
+│   │   ├── corrections/new/             修正申請作成
+│   │   └── api/                         全 API ルート
+│   ├── lib/
+│   │   ├── db.ts                        Prisma シングルトン
+│   │   ├── stripe.ts                    Stripe クライアント (lazy init)
+│   │   ├── email.ts                     メール送信 (Resend)
+│   │   ├── tenant-guard.ts             SUSPENDED テナント API ガード
+│   │   ├── session.ts                   セッション型 & パーサー
+│   │   ├── jst.ts                       JST タイムゾーン処理
+│   │   ├── time.ts                      時刻ユーティリティ
+│   │   ├── close.ts                     月次締め判定
+│   │   └── csv.ts                       CSV 生成 (BOM 付き UTF-8)
+│   └── generated/prisma/               Prisma 生成ファイル
+├── prisma/
+│   ├── schema.prisma                    スキーマ (14 モデル)
+│   ├── seed.ts                          デモデータ
+│   └── migrations/                      マイグレーション履歴
+├── public/                              PWA アイコン・マニフェスト
+├── .github/workflows/ci.yml            CI (lint / type-check / test / build)
+└── .env.example                         環境変数テンプレート
 ```
 
-Node.js 20+ が必要です。
+---
+
+## スクリプト一覧
+
+| コマンド | 説明 |
+|---------|------|
+| `npm run dev` | 開発サーバー (port 3002) |
+| `npm run build` | プロダクションビルド |
+| `npm start` | プロダクションサーバー (port 3002) |
+| `npm run lint` | ESLint |
+| `npm test` | Vitest テスト実行 |
+| `npm run test:watch` | テスト (watch モード) |
+| `npm run prisma:generate` | Prisma クライアント生成 |
+| `npm run prisma:migrate` | マイグレーション実行 |
+| `npm run prisma:studio` | Prisma Studio (DB GUI) |
+| `npm run db:seed` | デモデータ投入 |
 
 ---
 
 ## License
 
-Private
+MIT

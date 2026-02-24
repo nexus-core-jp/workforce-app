@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { auth } from "@/auth";
+import { isMonthClosed } from "@/lib/close";
 import { prisma } from "@/lib/db";
 import { toSessionUser } from "@/lib/session";
+import { guardSuspended } from "@/lib/tenant-guard";
 import { startOfJstDay } from "@/lib/time";
 
 function jsonError(message: string, status = 400) {
@@ -37,12 +39,19 @@ export async function POST(req: Request) {
 
   const { tenantId, id: userId } = user;
 
+  const suspended = await guardSuspended(tenantId);
+  if (suspended) return suspended;
+
   const raw = await req.json().catch(() => null);
   const input = upsertSchema.safeParse(raw);
   if (!input.success) return jsonError(input.error.message);
 
   const date = parseJstDateOnly(input.data.date);
   const shouldSubmit = input.data.submit === true;
+
+  if (await isMonthClosed(tenantId, date)) {
+    return jsonError("この月は締め済みです", 409);
+  }
 
   // Check if already submitted
   const existing = await prisma.dailyReport.findUnique({

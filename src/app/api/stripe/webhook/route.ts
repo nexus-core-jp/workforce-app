@@ -24,16 +24,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
-  switch (event.type) {
-    case "checkout.session.completed": {
-      const session = event.data.object as Stripe.Checkout.Session;
-      const tenantId = session.metadata?.tenantId;
-      if (tenantId) {
+  try {
+    switch (event.type) {
+      case "checkout.session.completed": {
+        const session = event.data.object as Stripe.Checkout.Session;
+        const tenantId = session.metadata?.tenantId;
+        if (!tenantId) {
+          console.error("[stripe-webhook] missing tenantId in checkout metadata");
+          break;
+        }
         await prisma.tenant.update({
           where: { id: tenantId },
           data: {
             plan: "ACTIVE",
-            stripeSubscriptionId: session.subscription as string,
+            stripeSubscriptionId: String(session.subscription ?? ""),
           },
         });
         await prisma.auditLog.create({
@@ -45,59 +49,68 @@ export async function POST(request: Request) {
             afterJson: { plan: "ACTIVE", subscriptionId: String(session.subscription ?? "") },
           },
         });
+        break;
       }
-      break;
-    }
 
-    case "invoice.payment_failed": {
-      const invoice = event.data.object as Stripe.Invoice;
-      const customerId = invoice.customer as string;
-      const tenant = await prisma.tenant.findUnique({
-        where: { stripeCustomerId: customerId },
-      });
-      if (tenant) {
-        await prisma.tenant.update({
-          where: { id: tenant.id },
-          data: { plan: "SUSPENDED" },
+      case "invoice.payment_failed": {
+        const invoice = event.data.object as Stripe.Invoice;
+        const customerId = typeof invoice.customer === "string"
+          ? invoice.customer
+          : invoice.customer?.id ?? null;
+        if (!customerId) break;
+        const tenant = await prisma.tenant.findUnique({
+          where: { stripeCustomerId: customerId },
         });
-        await prisma.auditLog.create({
-          data: {
-            tenantId: tenant.id,
-            action: "STRIPE_PAYMENT_FAILED",
-            entityType: "Tenant",
-            entityId: tenant.id,
-            beforeJson: { plan: tenant.plan },
-            afterJson: { plan: "SUSPENDED" },
-          },
-        });
+        if (tenant) {
+          await prisma.tenant.update({
+            where: { id: tenant.id },
+            data: { plan: "SUSPENDED" },
+          });
+          await prisma.auditLog.create({
+            data: {
+              tenantId: tenant.id,
+              action: "STRIPE_PAYMENT_FAILED",
+              entityType: "Tenant",
+              entityId: tenant.id,
+              beforeJson: { plan: tenant.plan },
+              afterJson: { plan: "SUSPENDED" },
+            },
+          });
+        }
+        break;
       }
-      break;
-    }
 
-    case "customer.subscription.deleted": {
-      const subscription = event.data.object as Stripe.Subscription;
-      const customerId = subscription.customer as string;
-      const tenant = await prisma.tenant.findUnique({
-        where: { stripeCustomerId: customerId },
-      });
-      if (tenant) {
-        await prisma.tenant.update({
-          where: { id: tenant.id },
-          data: { plan: "SUSPENDED", stripeSubscriptionId: null },
+      case "customer.subscription.deleted": {
+        const subscription = event.data.object as Stripe.Subscription;
+        const customerId = typeof subscription.customer === "string"
+          ? subscription.customer
+          : subscription.customer?.id ?? null;
+        if (!customerId) break;
+        const tenant = await prisma.tenant.findUnique({
+          where: { stripeCustomerId: customerId },
         });
-        await prisma.auditLog.create({
-          data: {
-            tenantId: tenant.id,
-            action: "STRIPE_SUBSCRIPTION_DELETED",
-            entityType: "Tenant",
-            entityId: tenant.id,
-            beforeJson: { plan: tenant.plan },
-            afterJson: { plan: "SUSPENDED" },
-          },
-        });
+        if (tenant) {
+          await prisma.tenant.update({
+            where: { id: tenant.id },
+            data: { plan: "SUSPENDED", stripeSubscriptionId: null },
+          });
+          await prisma.auditLog.create({
+            data: {
+              tenantId: tenant.id,
+              action: "STRIPE_SUBSCRIPTION_DELETED",
+              entityType: "Tenant",
+              entityId: tenant.id,
+              beforeJson: { plan: tenant.plan },
+              afterJson: { plan: "SUSPENDED" },
+            },
+          });
+        }
+        break;
       }
-      break;
     }
+  } catch (err) {
+    console.error(`[stripe-webhook] error handling ${event.type}:`, err);
+    return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 });
   }
 
   return NextResponse.json({ received: true });

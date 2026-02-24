@@ -5,6 +5,7 @@ import { Prisma } from "@/generated/prisma";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { toSessionUser } from "@/lib/session";
+import { guardSuspended } from "@/lib/tenant-guard";
 import { diffMinutes } from "@/lib/time";
 
 function jsonError(message: string, status = 400) {
@@ -26,6 +27,9 @@ export async function POST(req: Request) {
   const { tenantId, id: approverUserId, role } = user;
 
   if (role !== "ADMIN" && role !== "APPROVER") return jsonError("Forbidden", 403);
+
+  const suspended = await guardSuspended(tenantId);
+  if (suspended) return suspended;
 
   const raw = await req.json().catch(() => null);
   const input = schema.safeParse(raw);

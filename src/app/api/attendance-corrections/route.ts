@@ -5,6 +5,7 @@ import { auth } from "@/auth";
 import { isMonthClosed } from "@/lib/close";
 import { prisma } from "@/lib/db";
 import { toSessionUser } from "@/lib/session";
+import { guardSuspended } from "@/lib/tenant-guard";
 import { startOfJstDay } from "@/lib/time";
 
 function jsonError(message: string, status = 400) {
@@ -36,6 +37,9 @@ export async function POST(req: Request) {
   if (!user) return jsonError("Invalid session", 401);
 
   const { tenantId, id: userId } = user;
+
+  const suspended = await guardSuspended(tenantId);
+  if (suspended) return suspended;
 
   const raw = await req.json().catch(() => null);
   const input = schema.safeParse(raw);

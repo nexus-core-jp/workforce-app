@@ -5,6 +5,7 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { toSessionUser } from "@/lib/session";
+import { guardSuspended } from "@/lib/tenant-guard";
 
 const addSchema = z.object({
   name: z.string().min(1, "名前は必須です"),
@@ -29,6 +30,9 @@ export async function POST(request: Request) {
   if (!user || user.role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  const suspended = await guardSuspended(user.tenantId);
+  if (suspended) return suspended;
 
   const body = await request.json();
   const parsed = addSchema.safeParse(body);
@@ -86,6 +90,9 @@ export async function PATCH(request: Request) {
   if (!actor || actor.role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  const suspended = await guardSuspended(actor.tenantId);
+  if (suspended) return suspended;
 
   const body = await request.json();
   const parsed = patchSchema.safeParse(body);

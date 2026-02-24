@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { isMonthClosed } from "@/lib/close";
 import { prisma } from "@/lib/db";
 import { toSessionUser } from "@/lib/session";
+import { guardSuspended } from "@/lib/tenant-guard";
 import { diffMinutes, startOfJstDay } from "@/lib/time";
 
 type PunchAction = "CLOCK_IN" | "BREAK_START" | "BREAK_END" | "CLOCK_OUT";
@@ -35,6 +36,9 @@ export async function POST(req: Request) {
   if (!user) return jsonError("Invalid session", 401);
 
   const { tenantId, id: userId } = user;
+
+  const suspended = await guardSuspended(tenantId);
+  if (suspended) return suspended;
 
   let body: Record<string, unknown>;
   try {

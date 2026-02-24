@@ -25,12 +25,20 @@ export async function POST() {
     return NextResponse.json({ error: "No billing account" }, { status: 400 });
   }
 
-  const baseUrl = process.env.AUTH_URL || "http://localhost:3002";
+  try {
+    const baseUrl = process.env.AUTH_URL || "http://localhost:3002";
 
-  const portalSession = await getStripe().billingPortal.sessions.create({
-    customer: tenant.stripeCustomerId,
-    return_url: `${baseUrl}/admin/billing`,
-  });
+    const portalSession = await getStripe().billingPortal.sessions.create({
+      customer: tenant.stripeCustomerId,
+      return_url: `${baseUrl}/admin/billing`,
+    });
 
-  return NextResponse.json({ url: portalSession.url });
+    return NextResponse.json({ url: portalSession.url });
+  } catch (err) {
+    console.error("[stripe-portal] error:", err);
+    return NextResponse.json(
+      { error: "支払い管理画面の準備に失敗しました" },
+      { status: 500 },
+    );
+  }
 }

@@ -23,35 +23,43 @@ export async function POST() {
     return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
   }
 
-  // Create or reuse Stripe customer
-  let customerId = tenant.stripeCustomerId;
-  if (!customerId) {
-    const customer = await getStripe().customers.create({
-      name: tenant.name,
-      metadata: { tenantId: tenant.id },
-    });
-    customerId = customer.id;
-    await prisma.tenant.update({
-      where: { id: tenant.id },
-      data: { stripeCustomerId: customerId },
-    });
+  const priceId = process.env.STRIPE_PRICE_ID;
+  if (!priceId) {
+    return NextResponse.json({ error: "Stripe is not configured" }, { status: 503 });
   }
 
-  const baseUrl = process.env.AUTH_URL || "http://localhost:3002";
+  try {
+    // Create or reuse Stripe customer
+    let customerId = tenant.stripeCustomerId;
+    if (!customerId) {
+      const customer = await getStripe().customers.create({
+        name: tenant.name,
+        metadata: { tenantId: tenant.id },
+      });
+      customerId = customer.id;
+      await prisma.tenant.update({
+        where: { id: tenant.id },
+        data: { stripeCustomerId: customerId },
+      });
+    }
 
-  const checkoutSession = await getStripe().checkout.sessions.create({
-    customer: customerId,
-    mode: "subscription",
-    line_items: [
-      {
-        price: process.env.STRIPE_PRICE_ID!,
-        quantity: 1,
-      },
-    ],
-    metadata: { tenantId: tenant.id },
-    success_url: `${baseUrl}/admin/billing?success=1`,
-    cancel_url: `${baseUrl}/admin/billing?canceled=1`,
-  });
+    const baseUrl = process.env.AUTH_URL || "http://localhost:3002";
 
-  return NextResponse.json({ url: checkoutSession.url });
+    const checkoutSession = await getStripe().checkout.sessions.create({
+      customer: customerId,
+      mode: "subscription",
+      line_items: [{ price: priceId, quantity: 1 }],
+      metadata: { tenantId: tenant.id },
+      success_url: `${baseUrl}/admin/billing?success=1`,
+      cancel_url: `${baseUrl}/admin/billing?canceled=1`,
+    });
+
+    return NextResponse.json({ url: checkoutSession.url });
+  } catch (err) {
+    console.error("[stripe-checkout] error:", err);
+    return NextResponse.json(
+      { error: "決済の準備に失敗しました" },
+      { status: 500 },
+    );
+  }
 }
