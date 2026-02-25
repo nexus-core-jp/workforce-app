@@ -13,7 +13,7 @@ const schema = z.object({
 
 export async function POST(request: Request) {
   const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-  const { limited } = rateLimit(`reset:${ip}`, 10, 15 * 60 * 1000); // 10 requests per 15 min
+  const { limited } = await rateLimit(`reset:${ip}`, 10, 15 * 60 * 1000); // 10 requests per 15 min
   if (limited) {
     return NextResponse.json(
       { error: "リクエストが多すぎます。しばらくしてから再試行してください。" },

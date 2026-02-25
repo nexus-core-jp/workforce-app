@@ -1,61 +1,59 @@
 /**
- * Simple in-memory rate limiter using a sliding window.
- * Suitable for single-instance deployments (Vercel serverless resets on cold start).
+ * Database-backed rate limiter using a sliding window.
+ * Works correctly in serverless environments (Vercel, etc.)
+ * where in-memory state is not preserved across requests.
  */
 
-interface RateLimitEntry {
-  timestamps: number[];
-}
-
-const store = new Map<string, RateLimitEntry>();
-
-// Clean up old entries every 5 minutes
-const CLEANUP_INTERVAL = 5 * 60 * 1000;
-let lastCleanup = Date.now();
-
-function cleanup(windowMs: number) {
-  const now = Date.now();
-  if (now - lastCleanup < CLEANUP_INTERVAL) return;
-  lastCleanup = now;
-  const cutoff = now - windowMs;
-  for (const [key, entry] of store) {
-    entry.timestamps = entry.timestamps.filter((t) => t > cutoff);
-    if (entry.timestamps.length === 0) store.delete(key);
-  }
-}
+import { prisma } from "@/lib/db";
 
 /**
  * Check if a request should be rate-limited.
- * @param key - Unique identifier (e.g., IP address or IP+endpoint)
+ * @param key - Unique identifier (e.g., "login:tenant:email" or "forgot:ip")
  * @param maxRequests - Max requests allowed within the window
  * @param windowMs - Time window in milliseconds
  * @returns { limited: true, retryAfterMs } if rate-limited, { limited: false } otherwise
  */
-export function rateLimit(
+export async function rateLimit(
   key: string,
   maxRequests: number,
   windowMs: number,
-): { limited: boolean; retryAfterMs?: number } {
-  cleanup(windowMs);
+): Promise<{ limited: boolean; retryAfterMs?: number }> {
+  const now = new Date();
+  const cutoff = new Date(now.getTime() - windowMs);
 
-  const now = Date.now();
-  const cutoff = now - windowMs;
+  try {
+    // Count recent entries and get the oldest one in window
+    const [count, oldest] = await Promise.all([
+      prisma.rateLimitEntry.count({
+        where: { key, createdAt: { gt: cutoff } },
+      }),
+      prisma.rateLimitEntry.findFirst({
+        where: { key, createdAt: { gt: cutoff } },
+        orderBy: { createdAt: "asc" },
+        select: { createdAt: true },
+      }),
+    ]);
 
-  let entry = store.get(key);
-  if (!entry) {
-    entry = { timestamps: [] };
-    store.set(key, entry);
+    if (count >= maxRequests) {
+      const retryAfterMs = oldest
+        ? oldest.createdAt.getTime() + windowMs - now.getTime()
+        : windowMs;
+      return { limited: true, retryAfterMs };
+    }
+
+    // Record this request
+    await prisma.rateLimitEntry.create({ data: { key } });
+
+    // Periodically clean up old entries (non-blocking, 1% chance per request)
+    if (Math.random() < 0.01) {
+      prisma.rateLimitEntry
+        .deleteMany({ where: { createdAt: { lt: cutoff } } })
+        .catch(() => {});
+    }
+
+    return { limited: false };
+  } catch {
+    // If DB is unavailable, allow the request through
+    return { limited: false };
   }
-
-  // Remove expired timestamps
-  entry.timestamps = entry.timestamps.filter((t) => t > cutoff);
-
-  if (entry.timestamps.length >= maxRequests) {
-    const oldest = entry.timestamps[0];
-    const retryAfterMs = oldest + windowMs - now;
-    return { limited: true, retryAfterMs };
-  }
-
-  entry.timestamps.push(now);
-  return { limited: false };
 }

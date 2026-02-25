@@ -419,6 +419,14 @@ enum CloseScope {
   DEPARTMENT
 }
 
+model RateLimitEntry {
+  id        String   @id @default(cuid())
+  key       String
+  createdAt DateTime @default(now())
+
+  @@index([key, createdAt])
+}
+
 enum TenantPlan {
   TRIAL
   ACTIVE

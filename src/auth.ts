@@ -28,7 +28,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const { tenant, email, password } = signInSchema.parse(raw);
 
         // Rate limit: 10 attempts per tenant+email per 15 minutes
-        const { limited } = rateLimit(`login:${tenant}:${email}`, 10, 15 * 60 * 1000);
+        const { limited } = await rateLimit(`login:${tenant}:${email}`, 10, 15 * 60 * 1000);
         if (limited) return null;
 
         const dbTenant = await prisma.tenant.findUnique({ where: { slug: tenant } });
