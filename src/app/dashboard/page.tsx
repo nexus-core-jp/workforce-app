@@ -125,10 +125,8 @@ export default async function DashboardPage() {
   const monthEntries = await prisma.timeEntry.findMany({
     where: { tenantId, userId, date: { gte: monthStart, lte: today } },
   });
-  let monthlyWorkMinutes = 0;
   let monthlyOvertimeMinutes = 0;
   for (const me of monthEntries) {
-    monthlyWorkMinutes += me.workMinutes;
     monthlyOvertimeMinutes += calcDailyOvertime(me.workMinutes, STANDARD_DAILY_MINUTES);
   }
   const overtimePercentage = Math.round((monthlyOvertimeMinutes / MONTHLY_OVERTIME_LIMIT_MINUTES) * 100);

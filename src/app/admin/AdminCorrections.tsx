@@ -8,11 +8,11 @@ export function AdminCorrections(props: {
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loadingId, setLoadingId] = useState<string | null>(null);
 
   const decide = async (id: string, decision: "APPROVED" | "REJECTED") => {
     setError(null);
-    setLoading(true);
+    setLoadingId(id);
     try {
       const res = await fetch("/api/attendance-corrections/decide", {
         method: "POST",
@@ -25,7 +25,7 @@ export function AdminCorrections(props: {
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "処理に失敗しました");
     } finally {
-      setLoading(false);
+      setLoadingId(null);
     }
   };
 
@@ -58,7 +58,7 @@ export function AdminCorrections(props: {
               <div style={{ display: "flex", gap: 8 }}>
                 <button
                   data-variant="success"
-                  disabled={loading}
+                  disabled={loadingId === p.id}
                   onClick={() => decide(p.id, "APPROVED")}
                   style={{ flex: 1 }}
                 >
@@ -66,7 +66,7 @@ export function AdminCorrections(props: {
                 </button>
                 <button
                   data-variant="danger"
-                  disabled={loading}
+                  disabled={loadingId === p.id}
                   onClick={() => decide(p.id, "REJECTED")}
                   style={{ flex: 1 }}
                 >
@@ -77,7 +77,7 @@ export function AdminCorrections(props: {
           ))}
         </div>
       )}
-      {error ? <p className="error-text">エラー: {error}</p> : null}
+      {error ? <p className="error-text" role="alert">エラー: {error}</p> : null}
     </section>
   );
 }

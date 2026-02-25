@@ -108,7 +108,7 @@ export function LeaveRequestForm({ balance }: { balance: number }) {
         >
           申請する
         </button>
-        {error ? <p style={{ color: "crimson" }}>エラー: {error}</p> : null}
+        {error ? <p className="error-text" role="alert">エラー: {error}</p> : null}
       </div>
     </section>
   );

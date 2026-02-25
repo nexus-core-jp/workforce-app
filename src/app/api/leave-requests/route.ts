@@ -93,36 +93,48 @@ export async function POST(req: Request) {
     leaveDays = days;
   }
 
-  // Check balance for PAID/HALF leave
-  if (input.data.type === "PAID" || input.data.type === "HALF") {
-    const ledger = await prisma.leaveLedgerEntry.findMany({
-      where: { tenantId, userId },
-    });
-    let balance = 0;
-    for (const entry of ledger) {
-      const d = Number(entry.days);
-      if (entry.kind === "USE") {
-        balance -= d;
-      } else {
-        balance += d;
+  // Use transaction to prevent race condition on balance check + creation
+  const created = await prisma.$transaction(async (tx) => {
+    // Check balance for PAID/HALF leave
+    if (input.data.type === "PAID" || input.data.type === "HALF") {
+      const ledger = await tx.leaveLedgerEntry.findMany({
+        where: { tenantId, userId },
+      });
+      let balance = 0;
+      for (const entry of ledger) {
+        const d = Number(entry.days);
+        if (entry.kind === "USE") {
+          balance -= d;
+        } else {
+          balance += d;
+        }
+      }
+      if (balance < leaveDays) {
+        throw new Error(`有休残日数が不足しています（残: ${balance}日, 必要: ${leaveDays}日）`);
       }
     }
-    if (balance < leaveDays) {
-      return jsonError(`有休残日数が不足しています（残: ${balance}日, 必要: ${leaveDays}日）`);
-    }
-  }
 
-  const created = await prisma.leaveRequest.create({
-    data: {
-      tenantId,
-      userId,
-      type: input.data.type,
-      startAt,
-      endAt,
-      reason: input.data.reason ?? "",
-      status: "PENDING",
-    },
+    return tx.leaveRequest.create({
+      data: {
+        tenantId,
+        userId,
+        type: input.data.type,
+        startAt,
+        endAt,
+        reason: input.data.reason ?? "",
+        status: "PENDING",
+      },
+    });
+  }).catch((e: unknown) => {
+    if (e instanceof Error && e.message.includes("有休残日数")) {
+      return { error: e.message } as const;
+    }
+    throw e;
   });
+
+  if ("error" in created) {
+    return jsonError(created.error);
+  }
 
   // Notify admins/approvers
   const TYPE_LABELS: Record<string, string> = { PAID: "有給休暇", HALF: "半休", HOURLY: "時間休", ABSENCE: "欠勤" };

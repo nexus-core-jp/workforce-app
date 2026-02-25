@@ -95,7 +95,7 @@ export default function LoginPage() {
             {loading ? "ログイン中..." : "ログイン"}
           </button>
 
-          {error ? <p className="error-text">{error}</p> : null}
+          {error ? <p className="error-text" role="alert">{error}</p> : null}
         </form>
 
         <p style={{ marginTop: 12, fontSize: 14, textAlign: "center" }}>

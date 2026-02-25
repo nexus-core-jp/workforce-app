@@ -29,9 +29,11 @@ export function MemberList({
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function action(userId: string, actionType: string, role?: Role) {
     setLoading(userId);
+    setError(null);
     try {
       const res = await fetch("/api/admin/members", {
         method: "PATCH",
@@ -40,12 +42,12 @@ export function MemberList({
       });
       if (!res.ok) {
         const data = await res.json();
-        alert(data.error ?? "操作に失敗しました");
+        setError(data.error ?? "操作に失敗しました");
       } else {
         router.refresh();
       }
     } catch {
-      alert("操作に失敗しました");
+      setError("操作に失敗しました");
     } finally {
       setLoading(null);
     }
@@ -54,6 +56,7 @@ export function MemberList({
   return (
     <section>
       <h2 style={{ marginBottom: 12 }}>メンバー一覧（{members.length} 名）</h2>
+      {error && <p className="error-text" role="alert">{error}</p>}
 
       <div className="table-scroll">
         <table>

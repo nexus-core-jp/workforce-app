@@ -96,7 +96,7 @@ function ResetPasswordForm() {
         {loading ? "変更中..." : "パスワードを変更"}
       </button>
 
-      {error ? <p className="error-text">{error}</p> : null}
+      {error ? <p className="error-text" role="alert">{error}</p> : null}
     </form>
   );
 }

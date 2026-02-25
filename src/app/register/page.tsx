@@ -131,7 +131,7 @@ export default function RegisterPage() {
             {loading ? "登録中..." : "会社を登録"}
           </button>
 
-          {error ? <p className="error-text">{error}</p> : null}
+          {error ? <p className="error-text" role="alert">{error}</p> : null}
         </form>
 
         <p style={{ marginTop: 20, fontSize: 14, textAlign: "center" }}>

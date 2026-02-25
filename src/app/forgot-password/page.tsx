@@ -94,7 +94,7 @@ export default function ForgotPasswordPage() {
               {loading ? "送信中..." : "リセットリンクを送信"}
             </button>
 
-            {error ? <p className="error-text">{error}</p> : null}
+            {error ? <p className="error-text" role="alert">{error}</p> : null}
 
             <p style={{ fontSize: 14, textAlign: "center" }}>
               <Link href="/login">ログインに戻る</Link>

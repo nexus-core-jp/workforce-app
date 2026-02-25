@@ -93,7 +93,7 @@ export function AddMemberForm() {
           {loading ? "追加中..." : "メンバーを追加"}
         </button>
 
-        {error && <p className="error-text">{error}</p>}
+        {error && <p className="error-text" role="alert">{error}</p>}
         {success && (
           <p style={{ color: "var(--color-success)", fontSize: 14 }}>
             メンバーを追加しました

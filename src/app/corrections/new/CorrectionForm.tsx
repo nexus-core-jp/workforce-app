@@ -105,7 +105,7 @@ export function CorrectionForm({ date }: { date: string }) {
         <button disabled={isPending || reason.trim().length === 0} onClick={submit}>
           申請する
         </button>
-        {error ? <p style={{ color: "crimson" }}>エラー: {error}</p> : null}
+        {error ? <p className="error-text" role="alert">エラー: {error}</p> : null}
       </div>
     </section>
   );
