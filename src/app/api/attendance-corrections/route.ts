@@ -6,6 +6,7 @@ import { isMonthClosed } from "@/lib/close";
 import { prisma } from "@/lib/db";
 import { toSessionUser } from "@/lib/session";
 import { guardSuspended } from "@/lib/tenant-guard";
+import { notifyAdmins } from "@/lib/notify";
 import { startOfJstDay } from "@/lib/time";
 
 function jsonError(message: string, status = 400) {
@@ -63,6 +64,17 @@ export async function POST(req: Request) {
       reason: input.data.reason,
     },
   });
+
+  // Notify admins/approvers
+  const requester = await prisma.user.findUnique({ where: { id: userId }, select: { name: true, email: true } });
+  const requesterName = requester?.name ?? requester?.email ?? "ユーザー";
+  await notifyAdmins(
+    tenantId,
+    "CORRECTION_REQUESTED",
+    `${requesterName}さんから打刻修正申請`,
+    `${requesterName}さんが${input.data.date}の打刻修正を申請しました。`,
+    "/admin",
+  );
 
   return NextResponse.json({ ok: true, correction: created });
 }

@@ -35,6 +35,7 @@ model User {
   shiftAssignments ShiftAssignment[]
   leaveLedgerEntries LeaveLedgerEntry[]
 
+  notifications Notification[]
   departmentsApproving Department[] @relation("DepartmentApprover")
   attendanceCorrectionsApproved AttendanceCorrection[] @relation("AttendanceCorrectionApprover")
   leaveRequestsApproved LeaveRequest[] @relation("LeaveRequestApprover")
@@ -111,6 +112,7 @@ model Tenant {
   closes Close[]
   auditLogs AuditLog[]
   attendanceCorrections AttendanceCorrection[]
+  notifications Notification[]
   passwordResetTokens PasswordResetToken[]
 
   @@index([name])
@@ -334,6 +336,24 @@ model AuditLog {
   actor       User?    @relation("AuditLogActor", fields: [actorUserId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, createdAt])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  tenantId  String
+  userId    String    // recipient
+  type      String    // LEAVE_APPROVED, LEAVE_REJECTED, CORRECTION_APPROVED, CORRECTION_REJECTED, OVERTIME_ALERT, etc.
+  title     String
+  message   String
+  link      String?   // optional deep link, e.g. /leave-requests
+  read      Boolean   @default(false)
+  createdAt DateTime  @default(now())
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId, read])
+  @@index([tenantId, userId, createdAt])
 }
 
 model PasswordResetToken {

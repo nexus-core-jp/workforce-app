@@ -6,6 +6,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { toSessionUser } from "@/lib/session";
 import { guardSuspended } from "@/lib/tenant-guard";
+import { createNotification } from "@/lib/notify";
 import { diffMinutes } from "@/lib/time";
 
 function jsonError(message: string, status = 400) {
@@ -129,6 +130,17 @@ export async function POST(req: Request) {
       },
     });
   }
+
+  // Notify the requester
+  const decisionLabel = input.data.decision === "APPROVED" ? "承認" : "却下";
+  await createNotification({
+    tenantId,
+    userId: correction.userId,
+    type: input.data.decision === "APPROVED" ? "CORRECTION_APPROVED" : "CORRECTION_REJECTED",
+    title: `打刻修正が${decisionLabel}されました`,
+    message: `${correction.date.toISOString().slice(0, 10)} の打刻修正申請が${decisionLabel}されました。`,
+    link: "/dashboard",
+  });
 
   return NextResponse.json({ ok: true, correction: updated });
 }

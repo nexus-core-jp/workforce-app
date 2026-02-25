@@ -28,10 +28,29 @@ export function ClosePanel(props: { isAdmin: boolean; month: string; isClosed: b
     });
   };
 
+  const reopen = () => {
+    setError(null);
+    if (!confirm(`${props.month} の締めを解除しますか？打刻の修正が可能になります。`)) return;
+    startTransition(async () => {
+      try {
+        const res = await fetch("/api/close/reopen", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ month: props.month }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
+        router.refresh();
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : "Failed");
+      }
+    });
+  };
+
   return (
     <section>
       <h2 style={{ marginBottom: 12 }}>月次締め（管理者）</h2>
-      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
         <div>
           <span style={{ fontSize: 14, color: "var(--color-text-secondary)" }}>対象月: </span>
           <span style={{ fontWeight: 600 }}>{props.month}</span>
@@ -42,6 +61,11 @@ export function ClosePanel(props: { isAdmin: boolean; month: string; isClosed: b
         {!props.isClosed && (
           <button data-variant="primary" disabled={isPending} onClick={close}>
             今月を締める
+          </button>
+        )}
+        {props.isClosed && (
+          <button data-variant="danger" disabled={isPending} onClick={reopen}>
+            締め解除
           </button>
         )}
       </div>

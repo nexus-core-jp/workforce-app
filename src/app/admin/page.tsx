@@ -8,10 +8,15 @@ import { toSessionUser } from "@/lib/session";
 import { startOfJstDay } from "@/lib/time";
 
 import { ClosePanel } from "../dashboard/ClosePanel";
+import { NotificationBell } from "../dashboard/NotificationBell";
 import { Logo } from "../Logo";
 import { AdminCorrections } from "./AdminCorrections";
 import { AdminDailyReports } from "./AdminDailyReports";
+import { AdminLeaveRequests } from "./AdminLeaveRequests";
+import { AttendanceStatus } from "./AttendanceStatus";
 import { ExportPanel } from "./ExportPanel";
+import { LeaveBalanceReport } from "./LeaveBalanceReport";
+import { OvertimePanel } from "./OvertimePanel";
 
 export default async function AdminPage() {
   const session = await auth();
@@ -107,6 +112,33 @@ export default async function AdminPage() {
       : null,
   }));
 
+  // Pending leave requests
+  const pendingLeaves = await prisma.leaveRequest.findMany({
+    where: { tenantId, status: "PENDING" },
+    orderBy: { createdAt: "desc" },
+    take: 20,
+    include: { user: true },
+  });
+
+  const pendingLeavesUi = pendingLeaves.map((p) => ({
+    id: p.id,
+    userLabel: p.user.name ?? p.user.email,
+    type: p.type,
+    startAt: new Intl.DateTimeFormat("ja-JP", {
+      timeZone: "Asia/Tokyo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(p.startAt),
+    endAt: new Intl.DateTimeFormat("ja-JP", {
+      timeZone: "Asia/Tokyo",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(p.endAt),
+    reason: p.reason ?? "",
+  }));
+
   // Member count
   const memberCount = await prisma.user.count({ where: { tenantId } });
 
@@ -116,6 +148,92 @@ export default async function AdminPage() {
   });
   const todayClockedOut = await prisma.timeEntry.count({
     where: { tenantId, date: today, clockOutAt: { not: null } },
+  });
+
+  // Detailed attendance status for today
+  const allMembers = await prisma.user.findMany({
+    where: { tenantId, active: true, role: { not: "SUPER_ADMIN" } },
+    select: { id: true, name: true, email: true },
+    orderBy: { name: "asc" },
+  });
+
+  const todayTimeEntries = await prisma.timeEntry.findMany({
+    where: { tenantId, date: today },
+  });
+  const todayTimeMap = new Map(todayTimeEntries.map((e) => [e.userId, e]));
+
+  // Today's approved leave requests
+  const todayLeaves = await prisma.leaveRequest.findMany({
+    where: {
+      tenantId,
+      status: "APPROVED",
+      startAt: { lte: today },
+      endAt: { gte: today },
+    },
+    select: { userId: true },
+  });
+  const onLeaveUserIds = new Set(todayLeaves.map((l) => l.userId));
+
+  const formatTimeShort = (dt: Date | null) => {
+    if (!dt) return null;
+    return new Intl.DateTimeFormat("ja-JP", {
+      timeZone: "Asia/Tokyo",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(dt);
+  };
+
+  const attendanceStatusItems = allMembers.map((m) => {
+    const entry = todayTimeMap.get(m.id);
+    const isOnLeave = onLeaveUserIds.has(m.id);
+
+    let status: "working" | "on_break" | "clocked_out" | "not_clocked_in" | "on_leave";
+    if (isOnLeave && !entry) {
+      status = "on_leave";
+    } else if (!entry || !entry.clockInAt) {
+      status = "not_clocked_in";
+    } else if (entry.clockOutAt) {
+      status = "clocked_out";
+    } else if (entry.breakStartAt && !entry.breakEndAt) {
+      status = "on_break";
+    } else {
+      status = "working";
+    }
+
+    return {
+      name: m.name ?? m.email,
+      status,
+      clockInAt: entry ? formatTimeShort(entry.clockInAt) : null,
+      clockOutAt: entry ? formatTimeShort(entry.clockOutAt) : null,
+    };
+  });
+
+  // Leave balance report
+  const allLedgerEntries = await prisma.leaveLedgerEntry.findMany({
+    where: { tenantId },
+  });
+
+  const leaveBalanceItems = allMembers.map((m) => {
+    const entries = allLedgerEntries.filter((e) => e.userId === m.id);
+    let granted = 0;
+    let used = 0;
+    for (const e of entries) {
+      const days = Number(e.days);
+      if (e.kind === "USE") {
+        used += days;
+      } else {
+        granted += days;
+      }
+    }
+    const balance = granted - used;
+    const consumptionRate = granted > 0 ? Math.round((used / granted) * 100) : 0;
+    return {
+      name: m.name ?? m.email,
+      granted,
+      used,
+      balance,
+      consumptionRate,
+    };
   });
 
   const roleLabel = role === "ADMIN" ? "管理者" : "承認者";
@@ -129,6 +247,7 @@ export default async function AdminPage() {
           <span className={`badge ${role === "ADMIN" ? "badge-closed" : "badge-pending"}`}>
             {roleLabel}
           </span>
+          <NotificationBell />
           <form
             action={async () => {
               "use server";
@@ -167,6 +286,7 @@ export default async function AdminPage() {
         <nav style={{ display: "flex", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
           <Link href="/dashboard">← マイページ</Link>
           {role === "ADMIN" && <Link href="/admin/members">メンバー管理</Link>}
+          {role === "ADMIN" && <Link href="/admin/shifts">シフト管理</Link>}
           {role === "ADMIN" && <Link href="/admin/billing">プラン・請求</Link>}
           {role === "ADMIN" && <Link href="/admin/audit-logs">監査ログ</Link>}
         </nav>
@@ -188,21 +308,39 @@ export default async function AdminPage() {
               <div style={{ fontSize: 20, fontWeight: 700 }}>{todayClockedOut} 名</div>
             </div>
             <div>
-              <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>未処理申請</div>
+              <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>未処理修正</div>
               <div style={{ fontSize: 20, fontWeight: 700, color: pendingCorrections.length > 0 ? "var(--color-warning)" : undefined }}>
                 {pendingCorrections.length} 件
               </div>
             </div>
+            <div>
+              <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>未処理休暇</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: pendingLeaves.length > 0 ? "var(--color-warning)" : undefined }}>
+                {pendingLeaves.length} 件
+              </div>
+            </div>
           </div>
         </section>
+
+        {/* Today's attendance status */}
+        <AttendanceStatus items={attendanceStatusItems} />
 
         {/* Monthly close — ADMIN only */}
         {role === "ADMIN" && (
           <ClosePanel isAdmin={true} month={month} isClosed={!!companyClose} />
         )}
 
+        {/* Overtime Report */}
+        <OvertimePanel defaultMonth={month} />
+
+        {/* Leave balance report */}
+        <LeaveBalanceReport items={leaveBalanceItems} />
+
         {/* CSV Export */}
         <ExportPanel defaultMonth={month} />
+
+        {/* Leave request approvals */}
+        <AdminLeaveRequests items={pendingLeavesUi} />
 
         {/* Correction approvals */}
         <AdminCorrections items={pendingCorrectionsUi} />
