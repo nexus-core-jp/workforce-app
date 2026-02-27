@@ -25,10 +25,10 @@ export default async function DashboardPage() {
 
   if (role === "SUPER_ADMIN") redirect("/super-admin");
 
-  // Fetch tenant for trial info
+  // Fetch tenant for trial info and face auth setting
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
-    select: { plan: true, trialEndsAt: true },
+    select: { plan: true, trialEndsAt: true, faceAuthEnabled: true },
   });
 
   const today = startOfJstDay(new Date());
@@ -130,6 +130,12 @@ export default async function DashboardPage() {
     monthlyOvertimeMinutes += calcDailyOvertime(me.workMinutes, STANDARD_DAILY_MINUTES);
   }
   const overtimePercentage = Math.round((monthlyOvertimeMinutes / MONTHLY_OVERTIME_LIMIT_MINUTES) * 100);
+
+  // Face auth: check if user has registered face descriptors
+  const faceAuthEnabled = tenant?.faceAuthEnabled ?? false;
+  const faceRegistered = faceAuthEnabled
+    ? (await prisma.faceDescriptor.count({ where: { tenantId, userId } })) > 0
+    : false;
 
   const isAdminOrApprover = role === "ADMIN" || role === "APPROVER";
 
@@ -238,6 +244,8 @@ export default async function DashboardPage() {
           canBreakStart={canBreakStart}
           canBreakEnd={canBreakEnd}
           canClockOut={canClockOut}
+          faceAuthEnabled={faceAuthEnabled}
+          faceRegistered={faceRegistered}
         />
 
         <DailyReportPanel dateYmd={todayYmd} status={dailyReportStatus} />

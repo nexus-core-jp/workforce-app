@@ -39,6 +39,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# face-api.js model weights (downloaded via scripts/setup-face-models.sh)
+/public/models/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

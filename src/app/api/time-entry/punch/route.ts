@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { isMonthClosed } from "@/lib/close";
 import { prisma } from "@/lib/db";
+import { findBestMatch, isValidDescriptor } from "@/lib/face-match";
 import { toSessionUser } from "@/lib/session";
 import { guardSuspended } from "@/lib/tenant-guard";
 import { diffMinutes, startOfJstDay } from "@/lib/time";
@@ -55,6 +56,42 @@ export async function POST(req: Request) {
 
   if (await isMonthClosed(tenantId, today)) {
     return jsonError("This month is closed", 409);
+  }
+
+  // Face verification when enabled (required for CLOCK_IN and CLOCK_OUT)
+  if (action === "CLOCK_IN" || action === "CLOCK_OUT") {
+    const tenant = await prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { faceAuthEnabled: true },
+    });
+
+    if (tenant?.faceAuthEnabled) {
+      const faceDescriptor = body?.faceDescriptor;
+      if (!isValidDescriptor(faceDescriptor)) {
+        return jsonError("顔認証が必要です", 403);
+      }
+
+      const stored = await prisma.faceDescriptor.findMany({
+        where: { tenantId, userId },
+        select: { descriptor: true },
+      });
+
+      if (stored.length === 0) {
+        return jsonError(
+          "顔が未登録です。先に顔登録を行ってください。",
+          403,
+        );
+      }
+
+      const result = findBestMatch(
+        faceDescriptor,
+        stored.map((s) => s.descriptor as number[]),
+      );
+
+      if (!result.matched) {
+        return jsonError("顔認証に失敗しました", 403);
+      }
+    }
   }
 
   // Ensure today's TimeEntry exists (for the tenant/user/date triple)

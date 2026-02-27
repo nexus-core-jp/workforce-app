@@ -15,6 +15,7 @@ import { AdminDailyReports } from "./AdminDailyReports";
 import { AdminLeaveRequests } from "./AdminLeaveRequests";
 import { AttendanceStatus } from "./AttendanceStatus";
 import { ExportPanel } from "./ExportPanel";
+import { FaceAuthToggle } from "./FaceAuthToggle";
 import { LeaveBalanceReport } from "./LeaveBalanceReport";
 import { OvertimePanel } from "./OvertimePanel";
 
@@ -32,10 +33,10 @@ export default async function AdminPage() {
     redirect("/dashboard");
   }
 
-  // Fetch tenant for trial info
+  // Fetch tenant for trial info and face auth
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
-    select: { plan: true, trialEndsAt: true },
+    select: { plan: true, trialEndsAt: true, faceAuthEnabled: true },
   });
 
   const today = startOfJstDay(new Date());
@@ -236,6 +237,17 @@ export default async function AdminPage() {
     };
   });
 
+  // Face auth: count of users with registered descriptors (ADMIN only)
+  const faceAuthRegisteredUsers =
+    role === "ADMIN" && tenant?.faceAuthEnabled
+      ? (
+          await prisma.faceDescriptor.groupBy({
+            by: ["userId"],
+            where: { tenantId },
+          })
+        ).length
+      : 0;
+
   const roleLabel = role === "ADMIN" ? "管理者" : "承認者";
 
   return (
@@ -338,6 +350,15 @@ export default async function AdminPage() {
 
         {/* CSV Export */}
         <ExportPanel defaultMonth={month} />
+
+        {/* Face Auth Toggle — ADMIN only */}
+        {role === "ADMIN" && (
+          <FaceAuthToggle
+            enabled={tenant?.faceAuthEnabled ?? false}
+            registeredUsers={faceAuthRegisteredUsers}
+            totalUsers={allMembers.length}
+          />
+        )}
 
         {/* Leave request approvals */}
         <AdminLeaveRequests items={pendingLeavesUi} />
