@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { jsonError } from "@/lib/api";
 import { prisma } from "@/lib/db";
 import { toCsv } from "@/lib/csv";
+import { rateLimit } from "@/lib/rate-limit";
 import { toSessionUser } from "@/lib/session";
 import { formatLocal } from "@/lib/time";
 
@@ -28,8 +29,12 @@ export async function GET(req: Request) {
   const user = toSessionUser(session.user as Record<string, unknown>);
   if (!user) return jsonError("Invalid session", 401);
 
-  const { tenantId, role } = user;
+  const { tenantId, id: actorId, role } = user;
   if (role !== "ADMIN" && role !== "APPROVER") return jsonError("Forbidden", 403);
+
+  // Rate limit: 10 exports per user per hour
+  const { limited } = await rateLimit(`export:${actorId}`, 10, 60 * 60 * 1000);
+  if (limited) return jsonError("エクスポートの上限に達しました。しばらくお待ちください。", 429);
 
   const url = new URL(req.url);
   const raw = {
@@ -97,101 +102,17 @@ export async function GET(req: Request) {
   if (!month) return jsonError("monthパラメータが必要です");
   const dateRange = monthRange(month);
 
-  if (type === "corrections") {
-    const corrections = await prisma.attendanceCorrection.findMany({
-      where: { tenantId, createdAt: dateRange },
-      orderBy: { createdAt: "desc" },
-      include: {
-        user: { select: { name: true, email: true } },
-        approver: { select: { name: true } },
-      },
-    });
-    const headers = [
-      "申請日", "社員名", "メール", "対象日", "理由",
-      "申請出勤", "申請退勤", "ステータス", "承認者", "承認日時",
-    ];
-    const statusLabels: Record<string, string> = { PENDING: "未処理", APPROVED: "承認", REJECTED: "却下" };
-    const rows = corrections.map((c) => [
-      formatLocal(c.createdAt),
-      c.user.name ?? "",
-      c.user.email,
-      formatLocal(c.date).split(" ")[0],
-      c.reason,
-      formatLocal(c.requestedClockInAt),
-      formatLocal(c.requestedClockOutAt),
-      statusLabels[c.status] ?? c.status,
-      c.approver?.name ?? "",
-      formatLocal(c.decidedAt),
-    ]);
-    const csv = toCsv(headers, rows);
-    return new Response(csv, {
-      headers: {
-        "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="corrections_${month}.csv"`,
-      },
-    });
-  }
-
-  if (type === "leave-requests") {
-    const leaves = await prisma.leaveRequest.findMany({
-      where: { tenantId, createdAt: dateRange },
-      orderBy: { createdAt: "desc" },
-      include: {
-        user: { select: { name: true, email: true } },
-        approver: { select: { name: true } },
-      },
-    });
-    const headers = [
-      "申請日", "社員名", "メール", "種別", "開始日", "終了日",
-      "理由", "ステータス", "承認者", "承認日時",
-    ];
-    const typeLabels: Record<string, string> = { PAID: "有休", HALF: "半休", HOURLY: "時間休", ABSENCE: "欠勤" };
-    const statusLabels: Record<string, string> = { PENDING: "未処理", APPROVED: "承認", REJECTED: "却下", NEEDS_ATTENTION: "要確認" };
-    const rows = leaves.map((l) => [
-      formatLocal(l.createdAt),
-      l.user.name ?? "",
-      l.user.email,
-      typeLabels[l.type] ?? l.type,
-      formatLocal(l.startAt).split(" ")[0],
-      formatLocal(l.endAt).split(" ")[0],
-      l.reason ?? "",
-      statusLabels[l.status] ?? l.status,
-      l.approver?.name ?? "",
-      formatLocal(l.decidedAt),
-    ]);
-    const csv = toCsv(headers, rows);
-    return new Response(csv, {
-      headers: {
-        "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="leave_requests_${month}.csv"`,
-      },
-    });
-  }
-
-  if (type === "audit-logs") {
-    const logs = await prisma.auditLog.findMany({
-      where: { tenantId, createdAt: dateRange },
-      orderBy: { createdAt: "desc" },
-      include: { actor: { select: { name: true, email: true } } },
-    });
-    const headers = ["日時", "操作者", "アクション", "対象種別", "対象ID", "変更前", "変更後"];
-    const rows = logs.map((l) => [
-      formatLocal(l.createdAt),
-      l.actor?.name ?? l.actor?.email ?? "システム",
-      l.action,
-      l.entityType,
-      l.entityId,
-      l.beforeJson ? JSON.stringify(l.beforeJson) : "",
-      l.afterJson ? JSON.stringify(l.afterJson) : "",
-    ]);
-    const csv = toCsv(headers, rows);
-    return new Response(csv, {
-      headers: {
-        "Content-Type": "text/csv; charset=utf-8",
-        "Content-Disposition": `attachment; filename="audit_logs_${month}.csv"`,
-      },
-    });
-  }
+  // Audit log: track who exported what
+  prisma.auditLog.create({
+    data: {
+      tenantId,
+      actorUserId: actorId,
+      action: "DATA_EXPORTED",
+      entityType: "Export",
+      entityId: `${type}_${month}`,
+      afterJson: { type, month },
+    },
+  }).catch((err) => console.error("[audit]", err));
 
   if (type === "attendance") {
     const entries = await prisma.timeEntry.findMany({

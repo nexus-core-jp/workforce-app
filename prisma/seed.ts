@@ -5,8 +5,9 @@ const prisma = new PrismaClient();
 
 async function main() {
   if (process.env.NODE_ENV === "production") {
-    console.warn("WARNING: Running seed in production. Demo credentials will be created.");
-    console.warn("Change the admin password immediately after seeding.");
+    throw new Error(
+      "ABORT: Cannot seed production database! This script is for development/staging only.",
+    );
   }
 
   const passwordHash = await bcrypt.hash("password123", 10);

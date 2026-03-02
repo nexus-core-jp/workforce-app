@@ -18,6 +18,7 @@ model User {
   name         String?
   role         UserRole  @default(EMPLOYEE)
   passwordHash String?
+  lineId       String?
   active       Boolean   @default(true)
 
   tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -51,6 +52,7 @@ model User {
   updatedAt    DateTime  @updatedAt
 
   @@unique([tenantId, email])
+  @@unique([tenantId, lineId])
   @@index([tenantId, role])
 }
 

@@ -1,11 +1,16 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
+import Line from "next-auth/providers/line";
 import bcrypt from "bcryptjs";
+import { cookies } from "next/headers";
 import { z } from "zod";
 
 import { prisma } from "@/lib/db";
+import { logger } from "@/lib/logger";
 import { rateLimit } from "@/lib/rate-limit";
 import { LineProvider } from "@/lib/line-provider";
+
+import type { Provider } from "next-auth/providers";
 
 const signInSchema = z.object({
   tenant: z.string().min(1),
@@ -13,83 +18,125 @@ const signInSchema = z.object({
   password: z.string().min(8),
 });
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
-  // PrismaAdapter is removed: Credentials provider + JWT sessions don't need
-  // a database adapter. We handle user lookup directly in authorize().
-  session: { strategy: "jwt" },
-  providers: [
-    Credentials({
-      name: "Email and Password",
-      credentials: {
-        tenant: { label: "Tenant", type: "text" },
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" },
-      },
-      async authorize(raw) {
-        const { tenant, email, password } = signInSchema.parse(raw);
+// Build providers list — LINE is only added when env vars are configured
+const providers: Provider[] = [
+  Credentials({
+    name: "Email and Password",
+    credentials: {
+      tenant: { label: "Tenant", type: "text" },
+      email: { label: "Email", type: "email" },
+      password: { label: "Password", type: "password" },
+    },
+    async authorize(raw) {
+      const { tenant, email, password } = signInSchema.parse(raw);
 
-        // Rate limit: 10 attempts per tenant+email per 15 minutes
-        const { limited } = await rateLimit(`login:${tenant}:${email}`, 10, 15 * 60 * 1000);
-        if (limited) throw new Error("RATE_LIMITED");
+      // Rate limit: 10 attempts per tenant+email per 15 minutes
+      const { limited } = await rateLimit(`login:${tenant}:${email}`, 10, 15 * 60 * 1000);
+      if (limited) throw new Error("RATE_LIMITED");
 
-        const dbTenant = await prisma.tenant.findUnique({ where: { slug: tenant } });
-        if (!dbTenant) return null;
+      const dbTenant = await prisma.tenant.findUnique({ where: { slug: tenant } });
+      if (!dbTenant) return null;
 
-        const user = await prisma.user.findUnique({
-          where: { tenantId_email: { tenantId: dbTenant.id, email } },
-        });
-        if (!user?.active) return null;
-        if (!user.passwordHash) return null;
+      const user = await prisma.user.findUnique({
+        where: { tenantId_email: { tenantId: dbTenant.id, email } },
+      });
+      if (!user?.active) return null;
+      if (!user.passwordHash) return null;
 
-        const ok = await bcrypt.compare(password, user.passwordHash);
-        if (!ok) {
-          // Audit: login failed
-          prisma.auditLog.create({
-            data: {
-              tenantId: dbTenant.id,
-              actorUserId: user.id,
-              action: "LOGIN_FAILED",
-              entityType: "User",
-              entityId: user.id,
-              afterJson: { reason: "invalid_password" },
-            },
-          }).catch((err) => console.error("[audit]", err));
-          return null;
-        }
-
-        // Audit: login success
+      const ok = await bcrypt.compare(password, user.passwordHash);
+      if (!ok) {
+        // Audit: login failed
         prisma.auditLog.create({
           data: {
             tenantId: dbTenant.id,
             actorUserId: user.id,
-            action: "LOGIN_SUCCESS",
+            action: "LOGIN_FAILED",
             entityType: "User",
             entityId: user.id,
+            afterJson: { reason: "invalid_password" },
           },
-        }).catch((err) => console.error("[audit]", err));
+        }).catch((err) => logger.error("audit.write_failed", {}, err));
+        return null;
+      }
 
-        // Return user data; custom fields are forwarded via jwt/session callbacks.
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          tenantId: user.tenantId,
-          role: user.role,
-          departmentId: user.departmentId,
-          plan: dbTenant.plan,
-          trialEndsAt: dbTenant.trialEndsAt?.toISOString() ?? null,
-        };
-      },
+      // Audit: login success
+      prisma.auditLog.create({
+        data: {
+          tenantId: dbTenant.id,
+          actorUserId: user.id,
+          action: "LOGIN_SUCCESS",
+          entityType: "User",
+          entityId: user.id,
+        },
+      }).catch((err) => logger.error("audit.write_failed", {}, err));
+
+      // Return user data; custom fields are forwarded via jwt/session callbacks.
+      return {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        tenantId: user.tenantId,
+        role: user.role,
+        departmentId: user.departmentId,
+        plan: dbTenant.plan,
+      };
+    },
+  }),
+];
+
+if (process.env.LINE_CHANNEL_ID && process.env.LINE_CHANNEL_SECRET) {
+  providers.push(
+    Line({
+      clientId: process.env.LINE_CHANNEL_ID,
+      clientSecret: process.env.LINE_CHANNEL_SECRET,
     }),
-    // LINE Login — active only when LINE_CLIENT_ID / LINE_CLIENT_SECRET are set
-    ...(process.env.LINE_CLIENT_ID ? [LineProvider()] : []),
-  ],
+  );
+}
+
+export const { handlers, auth, signIn, signOut } = NextAuth({
+  // PrismaAdapter is removed: Credentials provider + JWT sessions don't need
+  // a database adapter. We handle user lookup directly in authorize().
+  session: { strategy: "jwt" },
+  providers,
   pages: {
     signIn: "/login",
   },
   callbacks: {
+    async signIn({ user, account }) {
+      if (account?.provider === "line") {
+        // LINE login: verify the user has a linked lineId in the specified tenant
+        const cookieStore = await cookies();
+        const tenantSlug = cookieStore.get("line_auth_tenant")?.value;
+        if (!tenantSlug) return "/login?error=NO_TENANT";
+
+        const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+        if (!tenant) return "/login?error=TENANT_NOT_FOUND";
+
+        const lineId = user.id;
+        const dbUser = await prisma.user.findFirst({
+          where: { tenantId: tenant.id, lineId, active: true },
+        });
+
+        if (!dbUser) return "/login?error=LINE_NOT_LINKED";
+
+        // Audit: LINE login success
+        prisma.auditLog.create({
+          data: {
+            tenantId: tenant.id,
+            actorUserId: dbUser.id,
+            action: "LOGIN_SUCCESS_LINE",
+            entityType: "User",
+            entityId: dbUser.id,
+          },
+        }).catch((err) => logger.error("audit.write_failed", {}, err));
+
+        return true;
+      }
+      return true;
+    },
     async jwt({ token, user, account }) {
-      if (user) {
+      if (user && account?.provider === "credentials") {
+        // On initial sign-in, `user` is set (from Credentials.authorize).
         const u = user as Record<string, unknown>;
         token.sub = u.id as string;
         token.tenantId = u.tenantId as string;
@@ -100,6 +147,27 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
       if (account?.provider === "line" && account.access_token) {
         token.lineAccessToken = account.access_token;
+      }
+
+      if (account?.provider === "line" && user) {
+        // LINE login — look up user from DB to populate JWT claims
+        const cookieStore = await cookies();
+        const tenantSlug = cookieStore.get("line_auth_tenant")?.value;
+        if (tenantSlug) {
+          const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+          if (tenant) {
+            const dbUser = await prisma.user.findFirst({
+              where: { tenantId: tenant.id, lineId: user.id, active: true },
+            });
+            if (dbUser) {
+              token.sub = dbUser.id;
+              token.tenantId = dbUser.tenantId;
+              token.role = dbUser.role;
+              token.departmentId = dbUser.departmentId ?? null;
+              token.plan = tenant.plan;
+            }
+          }
+        }
       }
 
       // Refresh plan from DB on every request to catch SA plan changes immediately

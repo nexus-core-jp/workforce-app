@@ -18,6 +18,8 @@ function getPasswordStrength(pw: string): { score: number; label: string; color:
   return { score, label: "強い", color: "var(--color-success)" };
 }
 
+type AuthMode = "password" | "line";
+
 export default function RegisterPage() {
   const router = useRouter();
   const [companyName, setCompanyName] = useState("");
@@ -25,6 +27,7 @@ export default function RegisterPage() {
   const [adminName, setAdminName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [authMode, setAuthMode] = useState<AuthMode>("password");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -33,6 +36,44 @@ export default function RegisterPage() {
   const hasUpper = /[A-Z]/.test(password);
   const hasDigit = /[0-9]/.test(password);
   const hasLength = password.length >= 8;
+  const passwordValid = hasLength && hasLower && hasUpper && hasDigit;
+
+  // For LINE-only registration, password is not required
+  const canSubmit = authMode === "line"
+    ? companyName.trim() !== "" && slug.trim() !== "" && adminName.trim() !== "" && email.trim() !== ""
+    : passwordValid;
+
+  const handleSubmit = async () => {
+    setError(null);
+    setLoading(true);
+    try {
+      if (authMode === "line") {
+        // LINE registration: store company info in cookie, redirect to LINE OAuth
+        // The LINE callback will create the company + user
+        const regData = { companyName, slug, adminName, email };
+        document.cookie = `line_register=${encodeURIComponent(JSON.stringify(regData))}; path=/; max-age=600; SameSite=Lax`;
+        window.location.href = "/api/line/link?mode=register";
+        return; // page navigates away
+      }
+
+      // Standard email+password registration
+      const res = await fetch("/api/register", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companyName, slug, adminName, email, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error ?? "登録に失敗しました");
+      } else {
+        router.push("/login");
+      }
+    } catch {
+      setError("ネットワークエラーが発生しました。接続を確認してください。");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <main
@@ -61,27 +102,9 @@ export default function RegisterPage() {
 
         <form
           style={{ display: "grid", gap: 16 }}
-          onSubmit={async (e) => {
+          onSubmit={(e) => {
             e.preventDefault();
-            setError(null);
-            setLoading(true);
-            try {
-              const res = await fetch("/api/register", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ companyName, slug, adminName, email, password }),
-              });
-              const data = await res.json();
-              if (!res.ok) {
-                setError(data.error ?? "登録に失敗しました");
-              } else {
-                router.push("/login");
-              }
-            } catch {
-              setError("ネットワークエラーが発生しました。接続を確認してください。");
-            } finally {
-              setLoading(false);
-            }
+            handleSubmit();
           }}
         >
           <fieldset disabled={loading} style={{ display: "contents", border: "none", padding: 0, margin: 0 }}>
@@ -133,56 +156,128 @@ export default function RegisterPage() {
               />
             </label>
 
-            <label style={{ display: "grid", gap: 6 }}>
-              <span>パスワード</span>
-              <input
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                type="password"
-                required
-                minLength={8}
-                autoComplete="new-password"
-              />
-              {/* Password strength meter */}
-              {password.length > 0 && (
-                <div>
-                  <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
-                    {[1, 2, 3, 4, 5, 6].map((i) => (
-                      <div
-                        key={i}
-                        style={{
-                          flex: 1,
-                          height: 4,
-                          borderRadius: 2,
-                          background: i <= strength.score ? strength.color : "var(--color-border)",
-                          transition: "background 0.2s",
-                        }}
-                      />
-                    ))}
+            {/* Auth mode selector */}
+            <div style={{ display: "grid", gap: 8 }}>
+              <span style={{ fontSize: 14, fontWeight: 500 }}>認証方法</span>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => setAuthMode("password")}
+                  style={{
+                    flex: 1,
+                    padding: "8px 12px",
+                    borderRadius: 8,
+                    border: `2px solid ${authMode === "password" ? "var(--color-primary)" : "var(--color-border)"}`,
+                    background: authMode === "password" ? "var(--color-primary-light, rgba(59,130,246,0.1))" : "transparent",
+                    cursor: "pointer",
+                    fontSize: 14,
+                    fontWeight: authMode === "password" ? 600 : 400,
+                  }}
+                >
+                  メール+パスワード
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAuthMode("line")}
+                  style={{
+                    flex: 1,
+                    padding: "8px 12px",
+                    borderRadius: 8,
+                    border: `2px solid ${authMode === "line" ? "#06C755" : "var(--color-border)"}`,
+                    background: authMode === "line" ? "rgba(6,199,85,0.1)" : "transparent",
+                    cursor: "pointer",
+                    fontSize: 14,
+                    fontWeight: authMode === "line" ? 600 : 400,
+                    color: authMode === "line" ? "#06C755" : undefined,
+                  }}
+                >
+                  LINEアカウント
+                </button>
+              </div>
+            </div>
+
+            {authMode === "password" && (
+              <label style={{ display: "grid", gap: 6 }}>
+                <span>パスワード</span>
+                <input
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  type="password"
+                  required
+                  minLength={8}
+                  autoComplete="new-password"
+                />
+                {/* Password strength meter */}
+                {password.length > 0 && (
+                  <div>
+                    <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
+                      {[1, 2, 3, 4, 5, 6].map((i) => (
+                        <div
+                          key={i}
+                          style={{
+                            flex: 1,
+                            height: 4,
+                            borderRadius: 2,
+                            background: i <= strength.score ? strength.color : "var(--color-border)",
+                            transition: "background 0.2s",
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <span style={{ fontSize: 12, color: strength.color, fontWeight: 600 }}>
+                      {strength.label}
+                    </span>
                   </div>
-                  <span style={{ fontSize: 12, color: strength.color, fontWeight: 600 }}>
-                    {strength.label}
+                )}
+                <div style={{ fontSize: 12, display: "grid", gap: 2 }}>
+                  <span style={{ color: hasLength ? "var(--color-success)" : "var(--color-text-secondary)" }}>
+                    {hasLength ? "\u2713" : "\u2022"} 8文字以上
+                  </span>
+                  <span style={{ color: hasLower ? "var(--color-success)" : "var(--color-text-secondary)" }}>
+                    {hasLower ? "\u2713" : "\u2022"} 小文字を含む
+                  </span>
+                  <span style={{ color: hasUpper ? "var(--color-success)" : "var(--color-text-secondary)" }}>
+                    {hasUpper ? "\u2713" : "\u2022"} 大文字を含む
+                  </span>
+                  <span style={{ color: hasDigit ? "var(--color-success)" : "var(--color-text-secondary)" }}>
+                    {hasDigit ? "\u2713" : "\u2022"} 数字を含む
                   </span>
                 </div>
-              )}
-              <div style={{ fontSize: 12, display: "grid", gap: 2 }}>
-                <span style={{ color: hasLength ? "var(--color-success)" : "var(--color-text-secondary)" }}>
-                  {hasLength ? "\u2713" : "\u2022"} 8文字以上
-                </span>
-                <span style={{ color: hasLower ? "var(--color-success)" : "var(--color-text-secondary)" }}>
-                  {hasLower ? "\u2713" : "\u2022"} 小文字を含む
-                </span>
-                <span style={{ color: hasUpper ? "var(--color-success)" : "var(--color-text-secondary)" }}>
-                  {hasUpper ? "\u2713" : "\u2022"} 大文字を含む
-                </span>
-                <span style={{ color: hasDigit ? "var(--color-success)" : "var(--color-text-secondary)" }}>
-                  {hasDigit ? "\u2713" : "\u2022"} 数字を含む
-                </span>
-              </div>
-            </label>
+              </label>
+            )}
 
-            <button type="submit" data-variant="primary" disabled={loading} style={{ marginTop: 8 }}>
-              {loading ? "登録中..." : "会社を登録"}
+            {authMode === "line" && (
+              <p style={{ fontSize: 13, color: "var(--color-text-secondary)", margin: 0 }}>
+                LINEアカウントで認証します。パスワードは不要です。
+                後からパスワードを設定してメール+パスワードログインを有効にすることもできます。
+              </p>
+            )}
+
+            <button
+              type="submit"
+              data-variant={authMode === "line" ? undefined : "primary"}
+              disabled={loading || !canSubmit}
+              style={{
+                marginTop: 8,
+                ...(authMode === "line" ? {
+                  background: "#06C755",
+                  color: "white",
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "12px 16px",
+                  fontSize: 16,
+                  fontWeight: 600,
+                  cursor: !canSubmit || loading ? "not-allowed" : "pointer",
+                  opacity: !canSubmit || loading ? 0.6 : 1,
+                } : {}),
+              }}
+            >
+              {loading
+                ? "登録中..."
+                : authMode === "line"
+                  ? "LINEで会社を登録"
+                  : "会社を登録"
+              }
             </button>
           </fieldset>
 

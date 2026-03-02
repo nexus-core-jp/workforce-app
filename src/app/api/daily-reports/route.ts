@@ -87,11 +87,21 @@ export async function POST(req: Request) {
       },
     });
 
-    return NextResponse.json({ ok: true, report });
-  } catch (err) {
-    console.error("[daily-reports] DB error:", err);
-    return jsonError("日報の保存に失敗しました。再度お試しください。", 500);
+  // Audit log for submissions
+  if (shouldSubmit) {
+    prisma.auditLog.create({
+      data: {
+        tenantId,
+        actorUserId: userId,
+        action: "DAILY_REPORT_SUBMITTED",
+        entityType: "DailyReport",
+        entityId: report.id,
+        afterJson: { date: input.data.date },
+      },
+    }).catch((err) => console.error("[audit]", err));
   }
+
+  return NextResponse.json({ ok: true, report });
 }
 
 /** GET: Fetch daily reports for the authenticated user */

@@ -1,17 +1,52 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState, useEffect } from "react";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+
+const LINE_ERROR_MESSAGES: Record<string, string> = {
+  LINE_NOT_LINKED: "このLINEアカウントは会社IDに紐づいていません。先にアカウント連携を行ってください。",
+  NO_TENANT: "会社IDを入力してからLINEログインを押してください。",
+  TENANT_NOT_FOUND: "指定された会社IDが見つかりません。",
+};
 
 export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [tenant, setTenant] = useState("demo");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Show errors from LINE OAuth redirects
+  useEffect(() => {
+    const errParam = searchParams.get("error");
+    if (errParam && LINE_ERROR_MESSAGES[errParam]) {
+      setError(LINE_ERROR_MESSAGES[errParam]);
+    }
+  }, [searchParams]);
+
+  const handleLineLogin = () => {
+    if (!tenant.trim()) {
+      setError("会社IDを入力してからLINEログインを押してください");
+      return;
+    }
+    setError(null);
+    setLoading(true);
+    // Store tenant in cookie so the auth callback can identify which tenant to check
+    document.cookie = `line_auth_tenant=${encodeURIComponent(tenant)}; path=/; max-age=600; SameSite=Lax`;
+    signIn("line", { callbackUrl: "/dashboard" });
+  };
 
   return (
     <main
@@ -105,18 +140,41 @@ export default function LoginPage() {
           {error ? <p className="error-text" role="alert">{error}</p> : null}
         </form>
 
-        <div style={{ marginTop: 24, textAlign: "center" }}>
-          <p style={{ opacity: 0.6, marginBottom: 8 }}>または</p>
-          <button
-            type="button"
-            onClick={() => signIn("line", { callbackUrl: "/dashboard" })}
-            style={{ background: "#06C755", color: "#fff", border: "none", width: "100%", padding: "10px 16px" }}
-          >
-            LINEでログイン
-          </button>
+        {/* Divider */}
+        <div style={{ position: "relative", textAlign: "center", margin: "20px 0 16px" }}>
+          <hr style={{ border: "none", borderTop: "1px solid var(--color-border)" }} />
+          <span style={{
+            position: "absolute", top: "50%", left: "50%",
+            transform: "translate(-50%, -50%)",
+            background: "var(--color-surface)", padding: "0 12px",
+            color: "var(--color-text-secondary)", fontSize: 12,
+          }}>
+            または
+          </span>
         </div>
 
-        <p style={{ marginTop: 12, fontSize: 14, textAlign: "center" }}>
+        {/* LINE Login Button */}
+        <button
+          type="button"
+          onClick={handleLineLogin}
+          disabled={loading}
+          style={{
+            width: "100%",
+            background: "#06C755",
+            color: "white",
+            border: "none",
+            borderRadius: 8,
+            padding: "12px 16px",
+            fontSize: 16,
+            fontWeight: 600,
+            cursor: loading ? "not-allowed" : "pointer",
+            opacity: loading ? 0.6 : 1,
+          }}
+        >
+          LINEでログイン
+        </button>
+
+        <p style={{ marginTop: 16, fontSize: 14, textAlign: "center" }}>
           <Link href="/forgot-password">パスワードをお忘れですか？</Link>
         </p>
         <p style={{ marginTop: 8, fontSize: 14, textAlign: "center" }}>

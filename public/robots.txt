@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /login
+Allow: /register
+Disallow: /admin
+Disallow: /super-admin
+Disallow: /dashboard
+Disallow: /api/
+Disallow: /face-auth/
+Disallow: /leave-requests
+Disallow: /corrections
+Disallow: /daily-reports

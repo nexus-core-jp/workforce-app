@@ -11,6 +11,10 @@ const envSchema = z.object({
   AUTH_SECRET: z.string().min(1, "AUTH_SECRET is required"),
   AUTH_URL: z.string().url().optional(),
 
+  // LINE Login — optional
+  LINE_CHANNEL_ID: z.string().optional(),
+  LINE_CHANNEL_SECRET: z.string().optional(),
+
   // Stripe — optional in dev, required in production
   STRIPE_SECRET_KEY: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
