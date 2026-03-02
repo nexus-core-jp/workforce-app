@@ -38,11 +38,11 @@ export async function POST(req: Request) {
   const suspended = await guardSuspended(tenantId);
   if (suspended) return suspended;
 
-  let body: Record<string, unknown>;
+  let body: Record<string, unknown> = {};
   try {
     body = await req.json();
   } catch {
-    body = {};
+    // empty body
   }
 
   const action = body?.action as PunchAction | undefined;

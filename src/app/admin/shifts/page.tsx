@@ -74,7 +74,7 @@ export default async function ShiftsPage() {
 
       <main className="page-container">
         <nav style={{ display: "flex", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
-          <Link href="/admin">← 管理画面</Link>
+          <Link href="/admin">&larr; 管理画面</Link>
           <Link href="/admin/members">メンバー管理</Link>
         </nav>
 

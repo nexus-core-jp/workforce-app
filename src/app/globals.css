@@ -232,6 +232,18 @@ label {
   color: var(--color-text-secondary);
 }
 
+/* Fieldset & Legend (from branch) */
+fieldset {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+
+legend {
+  font-weight: 600;
+  padding: 0 4px;
+}
+
 /* Card / Section */
 section {
   background: var(--color-surface);
@@ -241,6 +253,10 @@ section {
   margin-top: 16px;
   box-shadow: var(--shadow-sm);
 }
+
+/* Heading defaults */
+h1 { font-size: 1.5rem; font-weight: 700; }
+h2 { font-size: 1.125rem; font-weight: 600; margin-bottom: 8px; }
 
 /* Table */
 table {
@@ -419,6 +435,14 @@ tbody tr:hover {
   color: var(--color-danger);
   font-size: 14px;
   margin-top: 8px;
+}
+
+/* Nav (from branch — for standalone nav elements) */
+nav {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: center;
 }
 
 /* ============================================

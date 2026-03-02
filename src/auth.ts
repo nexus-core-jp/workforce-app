@@ -3,11 +3,13 @@ import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 
+import type { UserRole } from "@/generated/prisma";
 import { prisma } from "@/lib/db";
 import { rateLimit } from "@/lib/rate-limit";
+import { LineProvider } from "@/lib/line-provider";
 
 const signInSchema = z.object({
-  tenant: z.string().min(1), // tenant slug
+  tenant: z.string().min(1),
   email: z.string().email(),
   password: z.string().min(8),
 });
@@ -80,13 +82,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         };
       },
     }),
+    // LINE Login — active only when LINE_CLIENT_ID / LINE_CLIENT_SECRET are set
+    ...(process.env.LINE_CLIENT_ID ? [LineProvider()] : []),
   ],
   pages: {
     signIn: "/login",
   },
   callbacks: {
-    async jwt({ token, user }) {
-      // On initial sign-in, `user` is set (from Credentials.authorize).
+    async jwt({ token, user, account }) {
       if (user) {
         const u = user as Record<string, unknown>;
         token.sub = u.id as string;
@@ -95,6 +98,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.departmentId = (u.departmentId as string) ?? null;
         token.plan = u.plan as string;
         token.trialEndsAt = (u.trialEndsAt as string) ?? null;
+      }
+      if (account?.provider === "line" && account.access_token) {
+        token.lineAccessToken = account.access_token;
       }
 
       // Refresh plan from DB on every request to catch SA plan changes immediately

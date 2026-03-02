@@ -94,7 +94,7 @@ export function CorrectionForm({ date }: { date: string }) {
           <textarea
             required
             rows={4}
-            style={{ width: "100%" }}
+            style={{ width: "100%", padding: "6px 8px", border: "1px solid #ccc", borderRadius: 4 }}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
           />
@@ -102,8 +102,12 @@ export function CorrectionForm({ date }: { date: string }) {
         <p style={{ margin: 0, fontSize: 13, opacity: 0.7 }}>
           変更したい項目のみ入力してください。空欄の項目は元の値が維持されます。
         </p>
-        <button disabled={isPending || reason.trim().length === 0} onClick={submit}>
-          申請する
+        <button
+          disabled={isPending || reason.trim().length === 0}
+          onClick={submit}
+          style={{ padding: "8px 16px", cursor: "pointer" }}
+        >
+          {isPending ? "送信中..." : "申請する"}
         </button>
         {error ? <p className="error-text" role="alert">エラー: {error}</p> : null}
       </div>

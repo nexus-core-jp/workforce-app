@@ -1,28 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { formatLocal, diffMinutes } from "@/lib/time";
 
-describe("formatLocal", () => {
-  it("returns '-' for null", () => {
-    expect(formatLocal(null)).toBe("-");
-  });
-
-  it("returns '-' for undefined", () => {
-    expect(formatLocal(undefined)).toBe("-");
-  });
-
-  it("formats a date in JST", () => {
-    // 2026-02-23 09:00:00 JST = 2026-02-23 00:00:00 UTC
-    const dt = new Date("2026-02-23T00:00:00Z");
-    const result = formatLocal(dt);
-    // Should contain 2026/02/23 09:00:00 in ja-JP format
-    expect(result).toContain("2026");
-    expect(result).toContain("02");
-    expect(result).toContain("23");
-    expect(result).toContain("09");
-    expect(result).toContain("00");
-  });
-});
-
 describe("diffMinutes", () => {
   it("calculates minutes between two dates", () => {
     const a = new Date("2026-02-23T00:00:00Z");
@@ -45,5 +23,33 @@ describe("diffMinutes", () => {
     const a = new Date("2026-02-23T00:00:00Z");
     const b = new Date("2026-02-23T00:01:30Z"); // 1.5 minutes
     expect(diffMinutes(a, b)).toBe(1);
+  });
+
+  it("handles 8 hour workday", () => {
+    const a = new Date("2026-02-16T00:00:00Z");
+    const b = new Date("2026-02-16T08:00:00Z");
+    expect(diffMinutes(a, b)).toBe(480);
+  });
+});
+
+describe("formatLocal", () => {
+  it("returns '-' for null", () => {
+    expect(formatLocal(null)).toBe("-");
+  });
+
+  it("returns '-' for undefined", () => {
+    expect(formatLocal(undefined)).toBe("-");
+  });
+
+  it("formats a date in JST", () => {
+    // 2026-02-23 09:00:00 JST = 2026-02-23 00:00:00 UTC
+    const dt = new Date("2026-02-23T00:00:00Z");
+    const result = formatLocal(dt);
+    // Should contain 2026/02/23 09:00:00 in ja-JP format
+    expect(result).toContain("2026");
+    expect(result).toContain("02");
+    expect(result).toContain("23");
+    expect(result).toContain("09");
+    expect(result).toContain("00");
   });
 });

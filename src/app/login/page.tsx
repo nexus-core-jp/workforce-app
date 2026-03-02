@@ -104,6 +104,17 @@ export default function LoginPage() {
           {error ? <p className="error-text" role="alert">{error}</p> : null}
         </form>
 
+        <div style={{ marginTop: 24, textAlign: "center" }}>
+          <p style={{ opacity: 0.6, marginBottom: 8 }}>または</p>
+          <button
+            type="button"
+            onClick={() => signIn("line", { callbackUrl: "/dashboard" })}
+            style={{ background: "#06C755", color: "#fff", border: "none", width: "100%", padding: "10px 16px" }}
+          >
+            LINEでログイン
+          </button>
+        </div>
+
         <p style={{ marginTop: 12, fontSize: 14, textAlign: "center" }}>
           <Link href="/forgot-password">パスワードをお忘れですか？</Link>
         </p>

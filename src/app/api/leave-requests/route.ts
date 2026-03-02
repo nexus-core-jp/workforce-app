@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { auth } from "@/auth";
+import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/db";
 import { toSessionUser } from "@/lib/session";
 import { guardSuspended } from "@/lib/tenant-guard";
@@ -18,7 +19,7 @@ const createSchema = z.object({
   reason: z.string().max(500).optional(),
 });
 
-/** GET: list my leave requests */
+/** GET: list leave requests (own for users, all for admin/approver) */
 export async function GET() {
   const session = await auth();
   if (!session?.user) return jsonError("Unauthorized", 401);
@@ -26,12 +27,15 @@ export async function GET() {
   const user = toSessionUser(session.user as Record<string, unknown>);
   if (!user) return jsonError("Invalid session", 401);
 
-  const { tenantId, id: userId } = user;
+  const { tenantId, id: userId, role } = user;
+
+  const isAdminOrApprover = role === "ADMIN" || role === "APPROVER";
 
   const requests = await prisma.leaveRequest.findMany({
-    where: { tenantId, userId },
+    where: isAdminOrApprover ? { tenantId } : { tenantId, userId },
     orderBy: { createdAt: "desc" },
     take: 50,
+    include: { user: { select: { name: true, email: true } } },
   });
 
   // Leave balance: sum of GRANT/ADJUST - USE
@@ -135,6 +139,16 @@ export async function POST(req: Request) {
   if ("error" in created) {
     return jsonError(created.error);
   }
+
+  // Write audit log via audit library
+  await writeAuditLog({
+    tenantId,
+    actorUserId: userId,
+    action: "LEAVE_REQUEST_CREATED",
+    entityType: "LeaveRequest",
+    entityId: created.id,
+    after: { type: input.data.type, startAt: input.data.startAt, endAt: input.data.endAt },
+  });
 
   // Notify admins/approvers
   const TYPE_LABELS: Record<string, string> = { PAID: "有給休暇", HALF: "半休", HOURLY: "時間休", ABSENCE: "欠勤" };

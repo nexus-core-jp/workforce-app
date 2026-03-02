@@ -241,6 +241,11 @@ Node.js 20+ と PostgreSQL が必要です。
 | `STRIPE_SECRET_KEY` | 任意 | Stripe シークレットキー | `sk_live_xxxx` |
 | `STRIPE_WEBHOOK_SECRET` | 任意 | Stripe Webhook 署名シークレット | `whsec_xxxx` |
 | `STRIPE_PRICE_ID` | 任意 | Stripe サブスクリプション価格 ID | `price_xxxx` |
+| `LINE_CLIENT_ID` | 任意 | LINE Login クライアント ID | |
+| `LINE_CLIENT_SECRET` | 任意 | LINE Login クライアントシークレット | |
+| `LINE_CHANNEL_SECRET` | 任意 | LINE Bot チャネルシークレット | |
+| `LINE_CHANNEL_ACCESS_TOKEN` | 任意 | LINE Bot チャネルアクセストークン | |
+| `LINE_NOTIFY_TOKEN` | 任意 | LINE Notify トークン | |
 
 > `STRIPE_*` を設定しない場合、課金ボタンは「Stripe is not configured」エラーを返します。課金なしでも勤怠機能は使えます。
 
@@ -462,6 +467,13 @@ SA は `__platform` テナントの `SUPER_ADMIN` ロールのユーザーです
 | POST | `/api/admin/members` | メンバー追加 | ADMIN |
 | PATCH | `/api/admin/members` | 退社・復帰・ロール変更 | ADMIN |
 
+### ユーザー
+
+| メソッド | エンドポイント | 説明 | 権限 |
+|---------|--------------|------|------|
+| GET/POST | `/api/users` | ユーザー一覧/作成 | ログイン |
+| POST | `/api/users/change-password` | パスワード変更 | ログイン |
+
 ### 課金 (Stripe)
 
 | メソッド | エンドポイント | 説明 | 権限 |
@@ -475,6 +487,12 @@ SA は `__platform` テナントの `SUPER_ADMIN` ロールのユーザーです
 | メソッド | エンドポイント | 説明 | 権限 |
 |---------|--------------|------|------|
 | POST | `/api/super-admin/tenants/[id]/plan` | プラン変更 | SUPER_ADMIN |
+
+### ヘルスチェック
+
+| メソッド | エンドポイント | 説明 | 権限 |
+|---------|--------------|------|------|
+| GET | `/api/health` | ヘルスチェック | 不要 |
 
 > 全ての data-mutating API は SUSPENDED テナントからの呼び出しを `403` で拒否します。
 
@@ -564,6 +582,7 @@ workforce-app/
 | `npm run build` | プロダクションビルド |
 | `npm start` | プロダクションサーバー (port 3002) |
 | `npm run lint` | ESLint |
+| `npm run typecheck` | 型チェック |
 | `npm test` | Vitest テスト実行 |
 | `npm run test:watch` | テスト (watch モード) |
 | `npm run prisma:generate` | Prisma クライアント生成 |

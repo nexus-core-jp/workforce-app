@@ -4,6 +4,11 @@ import { PrismaClient, UserRole } from "../src/generated/prisma";
 const prisma = new PrismaClient();
 
 async function main() {
+  if (process.env.NODE_ENV === "production") {
+    console.warn("WARNING: Running seed in production. Demo credentials will be created.");
+    console.warn("Change the admin password immediately after seeding.");
+  }
+
   const passwordHash = await bcrypt.hash("password123", 10);
 
   // --- Platform tenant + Super Admin ---
@@ -36,7 +41,7 @@ async function main() {
     create: { name: "Demo", slug: "demo", plan: "TRIAL", trialEndsAt },
   });
 
-  await prisma.user.upsert({
+  const admin = await prisma.user.upsert({
     where: { tenantId_email: { tenantId: tenant.id, email: "admin@demo.local" } },
     update: { name: "Admin", role: UserRole.ADMIN, passwordHash, active: true },
     create: {

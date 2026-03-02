@@ -4,6 +4,7 @@ import { z } from "zod";
 import { Prisma } from "@/generated/prisma";
 import { auth } from "@/auth";
 import { jsonError } from "@/lib/api";
+import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/db";
 import { toSessionUser } from "@/lib/session";
 import { guardSuspended } from "@/lib/tenant-guard";
@@ -36,6 +37,11 @@ export async function POST(req: Request) {
   const correction = await prisma.attendanceCorrection.findUnique({ where: { id: input.data.id } });
   if (!correction || correction.tenantId !== tenantId) return jsonError("Not found", 404);
   if (correction.status !== "PENDING") return jsonError("Already decided", 409);
+
+  // Prevent self-approval
+  if (correction.userId === approverUserId) {
+    return jsonError("Cannot approve your own correction request", 403);
+  }
 
   await prisma.$transaction(async (tx) => {
     await tx.attendanceCorrection.update({
@@ -141,6 +147,17 @@ export async function POST(req: Request) {
         },
       });
     }
+  });
+
+  // Also write via writeAuditLog for the audit library
+  await writeAuditLog({
+    tenantId,
+    actorUserId: approverUserId,
+    action: `CORRECTION_${input.data.decision}`,
+    entityType: "AttendanceCorrection",
+    entityId: correction.id,
+    before: { status: correction.status },
+    after: { status: input.data.decision, approverUserId },
   });
 
   // Notify the requester

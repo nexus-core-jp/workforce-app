@@ -28,6 +28,9 @@ export default async function NewCorrectionPage(props: {
   return (
     <main className="page-container">
       <h1 style={{ marginBottom: 16 }}>打刻修正申請（新規）</h1>
+      <p style={{ opacity: 0.8 }}>
+        希望時刻と理由を入力して申請してください。
+      </p>
 
       <CorrectionForm date={date} />
 

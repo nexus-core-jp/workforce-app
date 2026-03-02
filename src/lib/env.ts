@@ -19,6 +19,13 @@ const envSchema = z.object({
   // Email (Resend)
   RESEND_API_KEY: z.string().optional(),
 
+  // LINE integration (optional)
+  LINE_CLIENT_ID: z.string().optional(),
+  LINE_CLIENT_SECRET: z.string().optional(),
+  LINE_CHANNEL_SECRET: z.string().optional(),
+  LINE_CHANNEL_ACCESS_TOKEN: z.string().optional(),
+  LINE_NOTIFY_TOKEN: z.string().optional(),
+
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
 });
 

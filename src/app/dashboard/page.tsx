@@ -191,10 +191,14 @@ export default async function DashboardPage() {
       <main className="page-container">
         {/* Admin link */}
         {isAdminOrApprover && (
-          <nav style={{ marginBottom: 8 }}>
+          <nav style={{ marginBottom: 8, display: "flex", gap: 12, flexWrap: "wrap" }}>
             <Link href="/admin" style={{ fontWeight: 500 }}>
               管理画面 →
             </Link>
+            {role === "ADMIN" && <Link href="/admin/users">ユーザー管理</Link>}
+            {role === "ADMIN" && <Link href="/admin/departments">部署管理</Link>}
+            {role === "ADMIN" && <Link href="/admin/shifts">シフト管理</Link>}
+            {role === "ADMIN" && <Link href="/admin/audit-logs">監査ログ</Link>}
           </nav>
         )}
 
@@ -265,6 +269,9 @@ export default async function DashboardPage() {
               <Link href="/leave-requests">
                 <button className="btn-compact">申請一覧</button>
               </Link>
+              <Link href="/leave/balance">
+                <button className="btn-compact">休暇残高</button>
+              </Link>
             </div>
           </div>
         </section>
@@ -275,6 +282,15 @@ export default async function DashboardPage() {
           <p style={{ fontSize: 14 }}>
             あなたの未処理申請: <span className="badge badge-pending">{myPendingCount} 件</span>
           </p>
+        </section>
+
+        {/* Quick links */}
+        <section>
+          <h2 style={{ marginBottom: 12 }}>リンク</h2>
+          <nav style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <Link href="/daily-reports">日報</Link>
+            <Link href="/settings">設定</Link>
+          </nav>
         </section>
 
         {/* Face registration link */}
