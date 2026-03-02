@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
+import { sendWelcomeEmail } from "@/lib/email";
 import { toSessionUser } from "@/lib/session";
 
 const registerDataSchema = z.object({
@@ -174,6 +175,11 @@ async function handleRegister(
         },
       },
     });
+  });
+
+  // Fire-and-forget welcome email
+  sendWelcomeEmail(regData.email, regData.adminName, regData.companyName, regData.slug, "line").catch((err) => {
+    console.error("[line-register] welcome email failed:", err);
   });
 
   // Redirect to login with success message

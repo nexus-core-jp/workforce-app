@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 
 import { prisma } from "@/lib/db";
-import { sendRegistrationNotification } from "@/lib/email";
+import { sendRegistrationNotification, sendWelcomeEmail } from "@/lib/email";
 import { extractClientIp } from "@/lib/ip";
 import { passwordSchema } from "@/lib/password";
 import { rateLimit } from "@/lib/rate-limit";
@@ -86,7 +86,10 @@ export async function POST(request: Request) {
       });
     });
 
-    // Fire-and-forget email notification
+    // Fire-and-forget emails
+    sendWelcomeEmail(email, adminName, companyName, slug, "password").catch((err) => {
+      console.error("[register] welcome email failed:", err);
+    });
     sendRegistrationNotification(companyName, slug, email).catch((err) => {
       console.error("[register] notification email failed:", err);
     });

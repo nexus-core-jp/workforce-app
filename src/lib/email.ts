@@ -33,6 +33,51 @@ export async function sendPasswordResetEmail(
   });
 }
 
+export async function sendWelcomeEmail(
+  email: string,
+  userName: string,
+  tenantName: string,
+  slug: string,
+  authMethod: "password" | "line",
+) {
+  if (!apiKey) {
+    console.warn("[email] RESEND_API_KEY not set — skipping welcome email");
+    return;
+  }
+
+  const resend = new Resend(apiKey);
+  const authUrl = process.env.AUTH_URL ?? "http://localhost:3002";
+  const loginUrl = `${authUrl}/login`;
+
+  const authNote =
+    authMethod === "line"
+      ? "ログイン方法: LINEアカウント（後からパスワードを設定することも可能です）"
+      : "ログイン方法: メールアドレス + パスワード";
+
+  await resend.emails.send({
+    from: "Workforce Nexus <noreply@workforce.app>",
+    to: email,
+    subject: "【Workforce Nexus】ご登録ありがとうございます",
+    text: [
+      `${userName} 様`,
+      ``,
+      `Workforce Nexus へのご登録ありがとうございます。`,
+      `以下の情報でログインできます。`,
+      ``,
+      `━━━━━━━━━━━━━━━━━━━━━━━`,
+      `会社名: ${tenantName}`,
+      `会社ID: ${slug}`,
+      `メールアドレス: ${email}`,
+      `${authNote}`,
+      `━━━━━━━━━━━━━━━━━━━━━━━`,
+      ``,
+      `ログインURL: ${loginUrl}`,
+      ``,
+      `ご不明な点がございましたら、お気軽にお問い合わせください。`,
+    ].join("\n"),
+  });
+}
+
 export async function sendRegistrationNotification(
   tenantName: string,
   slug: string,
