@@ -102,6 +102,10 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json({ ok: true, report });
+  } catch (err) {
+    console.error("[daily-reports]", err);
+    return jsonError("Internal server error", 500);
+  }
 }
 
 /** GET: Fetch daily reports for the authenticated user */

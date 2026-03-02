@@ -21,16 +21,6 @@ const registerSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  // Rate limit: 3 registrations per 30 minutes per IP
-  const ip = getClientIp(request);
-  const rl = checkRateLimit(`register:${ip}`, { max: 3, windowSec: 1800 });
-  if (!rl.allowed) {
-    return NextResponse.json(
-      { error: "リクエストが多すぎます。しばらく待ってから再度お試しください。" },
-      { status: 429, headers: { "Retry-After": String(Math.ceil((rl.resetAt - Date.now()) / 1000)) } },
-    );
-  }
-
   try {
     // Rate limit: 3 registrations per IP per hour
     const ip = extractClientIp(request);

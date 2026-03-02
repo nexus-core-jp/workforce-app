@@ -139,4 +139,8 @@ export async function POST(req: Request) {
   }).catch((err) => console.error("[audit]", err));
 
   return NextResponse.json({ ok: true, entry: updated });
+  } catch (err) {
+    console.error("[time-entry/punch]", err);
+    return jsonError("Internal server error", 500);
+  }
 }
