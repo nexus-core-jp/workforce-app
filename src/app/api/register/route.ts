@@ -94,8 +94,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("[register]", err);
+
+    // Provide more specific error messages
+    const message = err instanceof Error ? err.message : "";
+    if (message.includes("Unique constraint")) {
+      return NextResponse.json(
+        { error: "この会社IDまたはメールアドレスは既に使用されています" },
+        { status: 409 },
+      );
+    }
+    if (message.includes("connect") || message.includes("ECONNREFUSED")) {
+      return NextResponse.json(
+        { error: "サーバーの接続に問題が発生しています。しばらく待ってから再度お試しください。" },
+        { status: 503 },
+      );
+    }
+
     return NextResponse.json(
-      { error: "登録に失敗しました" },
+      { error: "登録に失敗しました。入力内容を確認して再度お試しください。" },
       { status: 500 },
     );
   }
