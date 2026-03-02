@@ -234,6 +234,8 @@ export default async function DashboardPage() {
               <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>今月残業</div>
               <div style={{ fontSize: 16, fontWeight: 600, color: overtimePercentage >= 80 ? "var(--color-danger)" : overtimePercentage >= 50 ? "var(--color-warning)" : undefined }}>
                 {Math.floor(monthlyOvertimeMinutes / 60)}h{monthlyOvertimeMinutes % 60}m
+                {overtimePercentage >= 80 && <span style={{ fontSize: 11, marginLeft: 4 }}>({overtimePercentage}% 要注意)</span>}
+                {overtimePercentage >= 50 && overtimePercentage < 80 && <span style={{ fontSize: 11, marginLeft: 4 }}>({overtimePercentage}%)</span>}
               </div>
             </div>
           </div>

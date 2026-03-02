@@ -110,7 +110,10 @@ export function MemberList({
                         data-variant="danger"
                         className="btn-compact"
                         disabled={isLoading}
-                        onClick={() => action(m.id, "deactivate")}
+                        onClick={() => {
+                          if (!confirm(`${m.name ?? m.email} を退社処理しますか？\nこのメンバーはログインできなくなります。`)) return;
+                          action(m.id, "deactivate");
+                        }}
                       >
                         退社
                       </button>

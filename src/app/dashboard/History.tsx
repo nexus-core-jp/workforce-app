@@ -31,13 +31,13 @@ export function History(props: {
           </thead>
           <tbody>
             {props.items.map((it) => (
-              <tr key={it.dateYmd}>
+              <tr key={it.dateYmd} style={{ opacity: it.clockInAt ? 1 : 0.5 }}>
                 <td style={{ fontWeight: 500 }}>{it.dateLabel}</td>
-                <td>{formatLocal(it.clockInAt)}</td>
+                <td>{it.clockInAt ? formatLocal(it.clockInAt) : <span style={{ color: "var(--color-text-secondary)", fontSize: 12 }}>未出勤</span>}</td>
                 <td>{formatLocal(it.breakStartAt)}</td>
                 <td>{formatLocal(it.breakEndAt)}</td>
                 <td>{formatLocal(it.clockOutAt)}</td>
-                <td>{it.workMinutes} 分</td>
+                <td>{it.clockInAt ? `${it.workMinutes} 分` : "—"}</td>
                 <td>
                   <Link href={`/corrections/new?date=${it.dateYmd}`}>修正申請</Link>
                 </td>

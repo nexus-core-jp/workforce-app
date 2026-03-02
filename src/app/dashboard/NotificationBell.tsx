@@ -15,6 +15,7 @@ interface Notification {
 export function NotificationBell() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [loadError, setLoadError] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const ref = useRef<HTMLDivElement>(null);
@@ -27,9 +28,10 @@ export function NotificationBell() {
         if (data.ok) {
           setNotifications(data.notifications);
           setUnreadCount(data.unreadCount);
+          setLoadError(false);
         }
       } catch {
-        // ignore
+        setLoadError(true);
       }
     });
   }, []);
@@ -167,7 +169,13 @@ export function NotificationBell() {
             )}
           </div>
 
-          {notifications.length === 0 ? (
+          {loadError ? (
+            <div style={{ padding: 24, textAlign: "center", color: "var(--color-danger)", fontSize: 13 }}>
+              通知の読み込みに失敗しました
+              <br />
+              <button className="btn-compact" style={{ marginTop: 8, fontSize: 12 }} onClick={load}>再読み込み</button>
+            </div>
+          ) : notifications.length === 0 ? (
             <div style={{ padding: 24, textAlign: "center", color: "var(--color-text-secondary)", fontSize: 13 }}>
               通知はありません
             </div>

@@ -52,48 +52,54 @@ export default function LoginPage() {
                 redirect: false,
               });
               if (res?.error) {
-                setError("会社ID、メールアドレス、またはパスワードが正しくありません");
+                if (res.error.includes("RATE_LIMITED")) {
+                  setError("ログイン試行回数が上限を超えました。15分後にお試しください。");
+                } else {
+                  setError("会社ID、メールアドレス、またはパスワードが正しくありません");
+                }
               } else {
                 router.push("/dashboard");
                 router.refresh();
               }
             } catch {
-              setError("ログインに失敗しました");
+              setError("ネットワークエラーが発生しました。接続を確認してください。");
             } finally {
               setLoading(false);
             }
           }}
         >
-          <label style={{ display: "grid", gap: 6 }}>
-            <span>会社ID</span>
-            <input value={tenant} onChange={(e) => setTenant(e.target.value)} required autoComplete="organization" />
-          </label>
+          <fieldset disabled={loading} style={{ display: "contents", border: "none", padding: 0, margin: 0 }}>
+            <label style={{ display: "grid", gap: 6 }}>
+              <span>会社ID</span>
+              <input value={tenant} onChange={(e) => setTenant(e.target.value)} required autoComplete="organization" />
+            </label>
 
-          <label style={{ display: "grid", gap: 6 }}>
-            <span>メールアドレス</span>
-            <input
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              type="email"
-              required
-              autoComplete="email"
-            />
-          </label>
+            <label style={{ display: "grid", gap: 6 }}>
+              <span>メールアドレス</span>
+              <input
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                type="email"
+                required
+                autoComplete="email"
+              />
+            </label>
 
-          <label style={{ display: "grid", gap: 6 }}>
-            <span>パスワード</span>
-            <input
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              type="password"
-              required
-              autoComplete="current-password"
-            />
-          </label>
+            <label style={{ display: "grid", gap: 6 }}>
+              <span>パスワード</span>
+              <input
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                type="password"
+                required
+                autoComplete="current-password"
+              />
+            </label>
 
-          <button type="submit" data-variant="primary" disabled={loading} style={{ marginTop: 8 }}>
-            {loading ? "ログイン中..." : "ログイン"}
-          </button>
+            <button type="submit" data-variant="primary" disabled={loading} style={{ marginTop: 8 }}>
+              {loading ? "ログイン中..." : "ログイン"}
+            </button>
+          </fieldset>
 
           {error ? <p className="error-text" role="alert">{error}</p> : null}
         </form>

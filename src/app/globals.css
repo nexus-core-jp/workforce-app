@@ -5,6 +5,8 @@
   --color-danger-hover: #b91c1c;
   --color-success: #16a34a;
   --color-warning: #d97706;
+  --color-success-bg: #e8f5e9;
+  --color-warning-bg: #fff3e0;
   --color-bg: #f8fafc;
   --color-surface: #ffffff;
   --color-text: #1e293b;
@@ -24,6 +26,8 @@
     --color-danger-hover: #f87171;
     --color-success: #22c55e;
     --color-warning: #f59e0b;
+    --color-success-bg: #064e3b;
+    --color-warning-bg: #78350f;
     --color-bg: #0f172a;
     --color-surface: #1e293b;
     --color-text: #f1f5f9;
@@ -174,6 +178,22 @@ select.select-compact {
 .table-scroll {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+  position: relative;
+}
+
+/* Scroll hint gradient for tables on mobile */
+@media (max-width: 768px) {
+  .table-scroll {
+    mask-image: linear-gradient(to right, black calc(100% - 24px), transparent);
+    -webkit-mask-image: linear-gradient(to right, black calc(100% - 24px), transparent);
+  }
+  .table-scroll::-webkit-scrollbar {
+    height: 4px;
+  }
+  .table-scroll::-webkit-scrollbar-thumb {
+    background: var(--color-border-hover);
+    border-radius: 2px;
+  }
 }
 
 /* Form elements — touch-friendly */

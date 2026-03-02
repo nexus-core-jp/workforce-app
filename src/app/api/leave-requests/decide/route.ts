@@ -39,16 +39,9 @@ export async function POST(req: Request) {
   if (!request || request.tenantId !== tenantId) return jsonError("Not found", 404);
   if (request.status !== "PENDING") return jsonError("Already decided", 409);
 
-  const updated = await prisma.leaveRequest.update({
-    where: { id: request.id },
-    data: {
-      status: input.data.decision,
-      approverUserId,
-      decidedAt: new Date(),
-    },
-  });
+  const decidedAt = new Date();
 
-  // When approved and PAID/HALF, deduct from leave ledger
+  // Wrap all state mutations in a single transaction for data integrity
   if (input.data.decision === "APPROVED" && (request.type === "PAID" || request.type === "HALF")) {
     let leaveDays = 1;
     if (request.type === "HALF") {
@@ -60,42 +53,71 @@ export async function POST(req: Request) {
       leaveDays = days;
     }
 
-    await prisma.leaveLedgerEntry.create({
-      data: {
-        tenantId,
-        userId: request.userId,
-        requestId: request.id,
-        kind: "USE",
-        days: leaveDays,
-        note: `${request.type === "HALF" ? "半休" : "有休"} ${leaveDays}日`,
-        effectiveDate: request.startAt,
-      },
-    });
-
-    // Audit log
-    await prisma.auditLog.create({
-      data: {
-        tenantId,
-        actorUserId: approverUserId,
-        action: "LEAVE_APPROVED",
-        entityType: "LeaveRequest",
-        entityId: request.id,
-        beforeJson: Prisma.JsonNull,
-        afterJson: { type: request.type, leaveDays, userId: request.userId },
-      },
-    });
-  } else if (input.data.decision === "REJECTED") {
-    await prisma.auditLog.create({
-      data: {
-        tenantId,
-        actorUserId: approverUserId,
-        action: "LEAVE_REJECTED",
-        entityType: "LeaveRequest",
-        entityId: request.id,
-        beforeJson: Prisma.JsonNull,
-        afterJson: { type: request.type, reason: request.reason, decision: "REJECTED" },
-      },
-    });
+    await prisma.$transaction([
+      prisma.leaveRequest.update({
+        where: { id: request.id },
+        data: { status: "APPROVED", approverUserId, decidedAt },
+      }),
+      prisma.leaveLedgerEntry.create({
+        data: {
+          tenantId,
+          userId: request.userId,
+          requestId: request.id,
+          kind: "USE",
+          days: leaveDays,
+          note: `${request.type === "HALF" ? "半休" : "有休"} ${leaveDays}日`,
+          effectiveDate: request.startAt,
+        },
+      }),
+      prisma.auditLog.create({
+        data: {
+          tenantId,
+          actorUserId: approverUserId,
+          action: "LEAVE_APPROVED",
+          entityType: "LeaveRequest",
+          entityId: request.id,
+          beforeJson: Prisma.JsonNull,
+          afterJson: { type: request.type, leaveDays, userId: request.userId },
+        },
+      }),
+    ]);
+  } else if (input.data.decision === "APPROVED") {
+    // APPROVED but not PAID/HALF — no ledger deduction
+    await prisma.$transaction([
+      prisma.leaveRequest.update({
+        where: { id: request.id },
+        data: { status: "APPROVED", approverUserId, decidedAt },
+      }),
+      prisma.auditLog.create({
+        data: {
+          tenantId,
+          actorUserId: approverUserId,
+          action: "LEAVE_APPROVED",
+          entityType: "LeaveRequest",
+          entityId: request.id,
+          beforeJson: Prisma.JsonNull,
+          afterJson: { type: request.type, userId: request.userId },
+        },
+      }),
+    ]);
+  } else {
+    await prisma.$transaction([
+      prisma.leaveRequest.update({
+        where: { id: request.id },
+        data: { status: "REJECTED", approverUserId, decidedAt },
+      }),
+      prisma.auditLog.create({
+        data: {
+          tenantId,
+          actorUserId: approverUserId,
+          action: "LEAVE_REJECTED",
+          entityType: "LeaveRequest",
+          entityId: request.id,
+          beforeJson: Prisma.JsonNull,
+          afterJson: { type: request.type, reason: request.reason, decision: "REJECTED" },
+        },
+      }),
+    ]);
   }
 
   // Notify the requester
@@ -111,5 +133,5 @@ export async function POST(req: Request) {
     link: "/leave-requests",
   });
 
-  return NextResponse.json({ ok: true, request: updated });
+  return NextResponse.json({ ok: true });
 }

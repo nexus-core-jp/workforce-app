@@ -23,7 +23,7 @@ model User {
   tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   departmentId String?
-  department   Department? @relation("DepartmentUsers", fields: [departmentId], references: [id])
+  department   Department? @relation("DepartmentUsers", fields: [departmentId], references: [id], onDelete: SetNull)
 
   accounts     Account[]
   sessions     Session[]
@@ -372,6 +372,7 @@ model PasswordResetToken {
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+  @@index([userId, usedAt])
 }
 
 enum UserRole {

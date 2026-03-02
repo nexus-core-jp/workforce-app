@@ -45,10 +45,13 @@ export default async function SuspendedPage() {
       >
         <h1 style={{ fontSize: 24, marginBottom: 12 }}><span className="logo"><span className="logo-icon" style={{ width: 32, height: 32, fontSize: 13 }}>WN</span><span className="logo-text">Workforce Nexus</span></span></h1>
         <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 12 }}>アカウント停止中</h2>
-        <p style={{ color: "var(--color-text-secondary)", marginBottom: 24 }}>
+        <p style={{ color: "var(--color-text-secondary)", marginBottom: 16 }}>
           お客様のアカウントは現在停止されています。
           <br />
-          サービスをご利用いただくには、管理者にお問い合わせください。
+          お支払い状況をご確認の上、管理者にお問い合わせください。
+        </p>
+        <p style={{ fontSize: 13, color: "var(--color-text-secondary)", marginBottom: 24 }}>
+          お問い合わせ: <a href="mailto:support@workforce-nexus.jp" style={{ color: "var(--color-primary)" }}>support@workforce-nexus.jp</a>
         </p>
         <form
           action={async () => {

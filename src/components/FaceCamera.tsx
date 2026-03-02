@@ -176,7 +176,7 @@ export function FaceCamera({
           overflow: "hidden",
           border: `3px solid ${faceDetected ? "var(--color-success)" : "var(--color-border)"}`,
           transition: "border-color 0.2s",
-          background: "#000",
+          background: "var(--color-bg, #000)",
         }}
       >
         <video
@@ -199,7 +199,7 @@ export function FaceCamera({
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              color: "#fff",
+              color: "var(--color-text, #fff)",
               fontSize: 14,
             }}
           >

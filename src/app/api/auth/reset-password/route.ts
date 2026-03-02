@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 
 import { prisma } from "@/lib/db";
+import { extractClientIp } from "@/lib/ip";
 import { passwordSchema } from "@/lib/password";
 import { rateLimit } from "@/lib/rate-limit";
 
@@ -12,7 +13,7 @@ const schema = z.object({
 });
 
 export async function POST(request: Request) {
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const ip = extractClientIp(request);
   const { limited } = await rateLimit(`reset:${ip}`, 10, 15 * 60 * 1000); // 10 requests per 15 min
   if (limited) {
     return NextResponse.json(

@@ -40,16 +40,9 @@ export async function POST(req: Request) {
   if (!correction || correction.tenantId !== tenantId) return jsonError("Not found", 404);
   if (correction.status !== "PENDING") return jsonError("Already decided", 409);
 
-  const updated = await prisma.attendanceCorrection.update({
-    where: { id: correction.id },
-    data: {
-      status: input.data.decision,
-      approverUserId,
-      decidedAt: new Date(),
-    },
-  });
+  const decidedAt = new Date();
 
-  // When approved, apply the requested times to the TimeEntry
+  // Wrap all state mutations in a single transaction for data integrity
   if (input.data.decision === "APPROVED") {
     const entry = await prisma.timeEntry.findUnique({
       where: {
@@ -85,50 +78,77 @@ export async function POST(req: Request) {
         workMinutes = Math.max(0, total - breakMin);
       }
 
-      const updatedEntry = await prisma.timeEntry.update({
-        where: { id: entry.id },
-        data: {
-          clockInAt: newClockInAt,
-          clockOutAt: newClockOutAt,
-          breakStartAt: newBreakStartAt,
-          breakEndAt: newBreakEndAt,
-          workMinutes,
-        },
-      });
-
-      // Audit log
-      await prisma.auditLog.create({
+      await prisma.$transaction([
+        prisma.attendanceCorrection.update({
+          where: { id: correction.id },
+          data: { status: "APPROVED", approverUserId, decidedAt },
+        }),
+        prisma.timeEntry.update({
+          where: { id: entry.id },
+          data: {
+            clockInAt: newClockInAt,
+            clockOutAt: newClockOutAt,
+            breakStartAt: newBreakStartAt,
+            breakEndAt: newBreakEndAt,
+            workMinutes,
+          },
+        }),
+        prisma.auditLog.create({
+          data: {
+            tenantId,
+            actorUserId: approverUserId,
+            action: "CORRECTION_APPROVED",
+            entityType: "TimeEntry",
+            entityId: entry.id,
+            beforeJson: beforeSnapshot,
+            afterJson: {
+              clockInAt: newClockInAt,
+              clockOutAt: newClockOutAt,
+              breakStartAt: newBreakStartAt,
+              breakEndAt: newBreakEndAt,
+              workMinutes,
+              correctionId: correction.id,
+            },
+          },
+        }),
+      ]);
+    } else {
+      await prisma.$transaction([
+        prisma.attendanceCorrection.update({
+          where: { id: correction.id },
+          data: { status: "APPROVED", approverUserId, decidedAt },
+        }),
+        prisma.auditLog.create({
+          data: {
+            tenantId,
+            actorUserId: approverUserId,
+            action: "CORRECTION_APPROVED",
+            entityType: "AttendanceCorrection",
+            entityId: correction.id,
+            beforeJson: Prisma.JsonNull,
+            afterJson: { note: "No matching time entry found" },
+          },
+        }),
+      ]);
+    }
+  } else {
+    await prisma.$transaction([
+      prisma.attendanceCorrection.update({
+        where: { id: correction.id },
+        data: { status: "REJECTED", approverUserId, decidedAt },
+      }),
+      prisma.auditLog.create({
         data: {
           tenantId,
           actorUserId: approverUserId,
-          action: "CORRECTION_APPROVED",
-          entityType: "TimeEntry",
-          entityId: entry.id,
-          beforeJson: beforeSnapshot,
-          afterJson: {
-            clockInAt: updatedEntry.clockInAt,
-            clockOutAt: updatedEntry.clockOutAt,
-            breakStartAt: updatedEntry.breakStartAt,
-            breakEndAt: updatedEntry.breakEndAt,
-            workMinutes: updatedEntry.workMinutes,
-            correctionId: correction.id,
-          },
+          action: "CORRECTION_REJECTED",
+          entityType: "AttendanceCorrection",
+          entityId: correction.id,
+          beforeJson: Prisma.JsonNull,
+          afterJson: { reason: correction.reason, decision: "REJECTED" },
         },
-      });
-    }
-  } else {
-    // Audit log for rejection
-    await prisma.auditLog.create({
-      data: {
-        tenantId,
-        actorUserId: approverUserId,
-        action: "CORRECTION_REJECTED",
-        entityType: "AttendanceCorrection",
-        entityId: correction.id,
-        beforeJson: Prisma.JsonNull,
-        afterJson: { reason: correction.reason, decision: "REJECTED" },
-      },
-    });
+      }),
+    ]);
   }
 
   // Notify the requester
@@ -142,5 +162,5 @@ export async function POST(req: Request) {
     link: "/dashboard",
   });
 
-  return NextResponse.json({ ok: true, correction: updated });
+  return NextResponse.json({ ok: true });
 }

@@ -11,6 +11,7 @@ export function ClosePanel(props: { isAdmin: boolean; month: string; isClosed: b
   if (!props.isAdmin) return null;
 
   const close = () => {
+    if (!confirm(`${props.month} の月次締めを実行しますか？\n締め後は打刻の修正ができなくなります。`)) return;
     setError(null);
     startTransition(async () => {
       try {

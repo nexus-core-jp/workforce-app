@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { prisma } from "@/lib/db";
 import { sendPasswordResetEmail } from "@/lib/email";
+import { extractClientIp } from "@/lib/ip";
 import { rateLimit } from "@/lib/rate-limit";
 
 const schema = z.object({
@@ -12,7 +13,7 @@ const schema = z.object({
 });
 
 export async function POST(request: Request) {
-  const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  const ip = extractClientIp(request);
   const { limited } = await rateLimit(`forgot:${ip}`, 5, 15 * 60 * 1000); // 5 requests per 15 min
   if (limited) {
     return NextResponse.json(

@@ -29,7 +29,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         // Rate limit: 10 attempts per tenant+email per 15 minutes
         const { limited } = await rateLimit(`login:${tenant}:${email}`, 10, 15 * 60 * 1000);
-        if (limited) return null;
+        if (limited) throw new Error("RATE_LIMITED");
 
         const dbTenant = await prisma.tenant.findUnique({ where: { slug: tenant } });
         if (!dbTenant) return null;
@@ -52,7 +52,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               entityId: user.id,
               afterJson: { reason: "invalid_password" },
             },
-          }).catch(() => {});
+          }).catch((err) => console.error("[audit]", err));
           return null;
         }
 
@@ -65,7 +65,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             entityType: "User",
             entityId: user.id,
           },
-        }).catch(() => {});
+        }).catch((err) => console.error("[audit]", err));
 
         // Return user data; custom fields are forwarded via jwt/session callbacks.
         return {

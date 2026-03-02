@@ -105,9 +105,15 @@ export function LeaveRequestForm({ balance }: { balance: number }) {
           data-variant="primary"
           disabled={isPending || !isValid}
           onClick={submit}
+          title={!isValid ? (!startAt || !endAt ? "日付を入力してください" : "有休残日数が不足しています") : undefined}
         >
           申請する
         </button>
+        {!isValid && startAt && endAt && balance <= 0 && (type === "PAID" || type === "HALF") && (
+          <p style={{ fontSize: 13, color: "var(--color-danger)" }}>
+            有休残日数が不足しているため申請できません
+          </p>
+        )}
         {error ? <p className="error-text" role="alert">エラー: {error}</p> : null}
       </div>
     </section>
