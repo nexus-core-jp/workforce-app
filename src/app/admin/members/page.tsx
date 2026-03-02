@@ -45,7 +45,7 @@ export default async function MembersPage() {
     id: m.id,
     name: m.name,
     email: m.email,
-    role: m.role as "EMPLOYEE" | "APPROVER" | "ADMIN",
+    role: m.role as "EMPLOYEE" | "ADMIN",
     active: m.active,
     createdAt: m.createdAt.toISOString(),
     departmentId: m.departmentId,

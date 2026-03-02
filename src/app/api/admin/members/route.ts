@@ -12,14 +12,14 @@ const addSchema = z.object({
   name: z.string().min(1, "名前は必須です"),
   email: z.string().email("メールアドレスの形式が正しくありません"),
   password: passwordSchema,
-  role: z.enum(["EMPLOYEE", "APPROVER", "ADMIN"]),
+  role: z.enum(["EMPLOYEE", "ADMIN"]),
   departmentId: z.string().nullable().optional(),
 });
 
 const patchSchema = z.object({
   userId: z.string().min(1),
   action: z.enum(["deactivate", "reactivate", "changeRole"]),
-  role: z.enum(["EMPLOYEE", "APPROVER", "ADMIN"]).optional(),
+  role: z.enum(["EMPLOYEE", "ADMIN"]).optional(),
 });
 
 export async function POST(request: Request) {

@@ -13,7 +13,7 @@ export function AddMemberForm({ departments }: { departments: Department[] }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"EMPLOYEE" | "APPROVER" | "ADMIN">("EMPLOYEE");
+  const [role, setRole] = useState<"EMPLOYEE" | "ADMIN">("EMPLOYEE");
   const [departmentId, setDepartmentId] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -97,7 +97,6 @@ export function AddMemberForm({ departments }: { departments: Department[] }) {
           <span>役割</span>
           <select value={role} onChange={(e) => setRole(e.target.value as typeof role)}>
             <option value="EMPLOYEE">従業員</option>
-            <option value="APPROVER">承認者</option>
             <option value="ADMIN">管理者</option>
           </select>
         </label>

@@ -135,7 +135,7 @@ export default async function DashboardPage() {
   const faceAuthEnabled = tenant?.faceAuthEnabled ?? false;
   const faceRegistered = faceAuthEnabled ? faceDescCount > 0 : false;
 
-  const isAdminOrApprover = role === "ADMIN" || role === "APPROVER";
+  const isAdmin = role === "ADMIN";
 
   const todayYmd = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Tokyo",
@@ -146,7 +146,7 @@ export default async function DashboardPage() {
   const dailyReportStatus: "none" | "draft" | "submitted" =
     dailyReport?.status === "SUBMITTED" ? "submitted" : dailyReport ? "draft" : "none";
 
-  const roleLabel = role === "ADMIN" ? "管理者" : role === "APPROVER" ? "承認者" : "従業員";
+  const roleLabel = role === "ADMIN" ? "管理者" : "従業員";
 
   return (
     <>
@@ -154,7 +154,7 @@ export default async function DashboardPage() {
         <h1><Logo /></h1>
         <div className="user-info">
           <span>{user.name ?? user.email}</span>
-          <span className={`badge ${role === "ADMIN" ? "badge-closed" : role === "APPROVER" ? "badge-pending" : "badge-open"}`}>
+          <span className={`badge ${role === "ADMIN" ? "badge-closed" : "badge-open"}`}>
             {roleLabel}
           </span>
           <NotificationBell />
@@ -193,7 +193,7 @@ export default async function DashboardPage() {
 
       <main className="page-container">
         {/* Admin link */}
-        {isAdminOrApprover && (
+        {isAdmin && (
           <nav style={{ marginBottom: 8 }}>
             <Link href="/admin" style={{ fontWeight: 500 }}>
               管理画面 →

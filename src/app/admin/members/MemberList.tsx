@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-type Role = "EMPLOYEE" | "APPROVER" | "ADMIN";
+type Role = "EMPLOYEE" | "ADMIN";
 
 interface Department {
   id: string;
@@ -21,9 +21,8 @@ interface Member {
   departmentName: string | null;
 }
 
-const roleLabels: Record<Role, string> = {
+const roleLabels: Record<string, string> = {
   EMPLOYEE: "従業員",
-  APPROVER: "承認者",
   ADMIN: "管理者",
 };
 
@@ -130,8 +129,8 @@ export function MemberList({
                   </td>
                   <td>
                     {isSelf ? (
-                      <span className={`badge ${m.role === "ADMIN" ? "badge-closed" : m.role === "APPROVER" ? "badge-pending" : "badge-open"}`}>
-                        {roleLabels[m.role]}
+                      <span className={`badge ${m.role === "ADMIN" ? "badge-closed" : "badge-open"}`}>
+                        {roleLabels[m.role] ?? m.role}
                       </span>
                     ) : (
                       <select
@@ -142,7 +141,6 @@ export function MemberList({
                         aria-label={`${m.name ?? m.email} の役割`}
                       >
                         <option value="EMPLOYEE">従業員</option>
-                        <option value="APPROVER">承認者</option>
                         <option value="ADMIN">管理者</option>
                       </select>
                     )}

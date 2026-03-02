@@ -31,7 +31,7 @@ export default async function DepartmentsPage() {
       where: {
         tenantId: user.tenantId,
         active: true,
-        role: { in: ["ADMIN", "APPROVER"] },
+        role: "ADMIN",
       },
       select: { id: true, name: true, email: true },
       orderBy: { name: "asc" },

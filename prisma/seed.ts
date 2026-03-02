@@ -68,12 +68,12 @@ async function main() {
 
   await prisma.user.upsert({
     where: { tenantId_email: { tenantId: tenant.id, email: "suzuki@demo.local" } },
-    update: { name: "鈴木花子", role: UserRole.APPROVER, passwordHash, active: true },
+    update: { name: "鈴木花子", role: UserRole.ADMIN, passwordHash, active: true },
     create: {
       tenantId: tenant.id,
       email: "suzuki@demo.local",
       name: "鈴木花子",
-      role: UserRole.APPROVER,
+      role: UserRole.ADMIN,
       passwordHash,
     },
   });

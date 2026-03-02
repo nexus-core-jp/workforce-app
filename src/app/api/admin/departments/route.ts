@@ -31,7 +31,7 @@ export async function GET() {
   }
 
   const user = toSessionUser(session.user as Record<string, unknown>);
-  if (!user || (user.role !== "ADMIN" && user.role !== "APPROVER")) {
+  if (!user || user.role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

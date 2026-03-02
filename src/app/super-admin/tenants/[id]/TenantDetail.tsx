@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Logo } from "../../../Logo";
 
 type TenantPlan = "TRIAL" | "ACTIVE" | "SUSPENDED";
-type UserRole = "EMPLOYEE" | "APPROVER" | "ADMIN" | "SUPER_ADMIN";
+type UserRole = string;
 
 interface TenantInfo {
   id: string;
@@ -184,7 +184,7 @@ export function TenantDetail({ tenant, users }: { tenant: TenantInfo; users: Use
                       {showPii ? u.email : maskEmail(u.email)}
                     </td>
                     <td>
-                      <span className={`badge ${u.role === "ADMIN" ? "badge-closed" : u.role === "APPROVER" ? "badge-pending" : "badge-open"}`}>
+                      <span className={`badge ${u.role === "ADMIN" ? "badge-closed" : "badge-open"}`}>
                         {u.role}
                       </span>
                     </td>

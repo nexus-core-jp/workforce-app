@@ -22,7 +22,7 @@ export async function createNotification(params: CreateNotificationParams) {
   });
 }
 
-/** Notify all ADMIN/APPROVER users in a tenant */
+/** Notify all ADMIN users in a tenant */
 export async function notifyAdmins(
   tenantId: string,
   type: string,
@@ -34,7 +34,7 @@ export async function notifyAdmins(
     where: {
       tenantId,
       active: true,
-      role: { in: ["ADMIN", "APPROVER"] },
+      role: "ADMIN",
     },
     select: { id: true },
   });

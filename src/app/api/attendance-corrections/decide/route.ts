@@ -27,7 +27,7 @@ export async function POST(req: Request) {
 
   const { tenantId, id: approverUserId, role } = user;
 
-  if (role !== "ADMIN" && role !== "APPROVER") return jsonError("Forbidden", 403);
+  if (role !== "ADMIN") return jsonError("Forbidden", 403);
 
   const suspended = await guardSuspended(tenantId);
   if (suspended) return suspended;

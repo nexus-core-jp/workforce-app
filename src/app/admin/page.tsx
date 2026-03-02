@@ -28,8 +28,8 @@ export default async function AdminPage() {
 
   const { tenantId, role } = user;
 
-  // Only ADMIN and APPROVER can access this page
-  if (role !== "ADMIN" && role !== "APPROVER") {
+  // Only ADMIN can access this page
+  if (role !== "ADMIN") {
     redirect("/dashboard");
   }
 
@@ -60,19 +60,17 @@ export default async function AdminPage() {
     todayLeaves,
     allLedgerEntries,
   ] = await Promise.all([
-    // Monthly close status (ADMIN only)
-    role === "ADMIN"
-      ? prisma.close.findUnique({
-          where: {
-            tenantId_month_scope_departmentId: {
-              tenantId,
-              month,
-              scope: "COMPANY",
-              departmentId: "",
-            },
-          },
-        })
-      : null,
+    // Monthly close status
+    prisma.close.findUnique({
+      where: {
+        tenantId_month_scope_departmentId: {
+          tenantId,
+          month,
+          scope: "COMPANY",
+          departmentId: "",
+        },
+      },
+    }),
     // Pending correction requests
     prisma.attendanceCorrection.findMany({
       where: { tenantId, status: "PENDING" },
@@ -233,7 +231,7 @@ export default async function AdminPage() {
 
   // Face auth: count of users with registered descriptors (ADMIN only)
   const faceAuthRegisteredUsers =
-    role === "ADMIN" && tenant?.faceAuthEnabled
+    tenant?.faceAuthEnabled
       ? (
           await prisma.faceDescriptor.groupBy({
             by: ["userId"],
@@ -242,7 +240,7 @@ export default async function AdminPage() {
         ).length
       : 0;
 
-  const roleLabel = role === "ADMIN" ? "管理者" : "承認者";
+  const roleLabel = "管理者";
 
   return (
     <>
@@ -250,7 +248,7 @@ export default async function AdminPage() {
         <h1><Logo /></h1>
         <div className="user-info">
           <span>{user.name ?? user.email}</span>
-          <span className={`badge ${role === "ADMIN" ? "badge-closed" : "badge-pending"}`}>
+          <span className="badge badge-closed">
             {roleLabel}
           </span>
           <NotificationBell />
@@ -291,11 +289,11 @@ export default async function AdminPage() {
         {/* Navigation */}
         <nav style={{ display: "flex", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
           <Link href="/dashboard">← マイページ</Link>
-          {role === "ADMIN" && <Link href="/admin/members">メンバー管理</Link>}
-          {role === "ADMIN" && <Link href="/admin/departments">部署管理</Link>}
-          {role === "ADMIN" && <Link href="/admin/shifts">シフト管理</Link>}
-          {role === "ADMIN" && <Link href="/admin/billing">プラン・請求</Link>}
-          {role === "ADMIN" && <Link href="/admin/audit-logs">監査ログ</Link>}
+          <Link href="/admin/members">メンバー管理</Link>
+          <Link href="/admin/departments">部署管理</Link>
+          <Link href="/admin/shifts">シフト管理</Link>
+          <Link href="/admin/billing">プラン・請求</Link>
+          <Link href="/admin/audit-logs">監査ログ</Link>
         </nav>
 
         {/* Overview cards */}
@@ -332,10 +330,8 @@ export default async function AdminPage() {
         {/* Today's attendance status */}
         <AttendanceStatus items={attendanceStatusItems} />
 
-        {/* Monthly close — ADMIN only */}
-        {role === "ADMIN" && (
-          <ClosePanel isAdmin={true} month={month} isClosed={!!companyClose} />
-        )}
+        {/* Monthly close */}
+        <ClosePanel isAdmin={true} month={month} isClosed={!!companyClose} />
 
         {/* Overtime Report */}
         <OvertimePanel defaultMonth={month} />
@@ -346,14 +342,12 @@ export default async function AdminPage() {
         {/* CSV Export */}
         <ExportPanel defaultMonth={month} />
 
-        {/* Face Auth Toggle — ADMIN only */}
-        {role === "ADMIN" && (
-          <FaceAuthToggle
-            enabled={tenant?.faceAuthEnabled ?? false}
-            registeredUsers={faceAuthRegisteredUsers}
-            totalUsers={allMembers.length}
-          />
-        )}
+        {/* Face Auth Toggle */}
+        <FaceAuthToggle
+          enabled={tenant?.faceAuthEnabled ?? false}
+          registeredUsers={faceAuthRegisteredUsers}
+          totalUsers={allMembers.length}
+        />
 
         {/* Leave request approvals */}
         <AdminLeaveRequests items={pendingLeavesUi} />
