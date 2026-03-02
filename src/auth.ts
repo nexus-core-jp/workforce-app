@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 
 import { prisma } from "@/lib/db";
+import { logger } from "@/lib/logger";
 import { rateLimit } from "@/lib/rate-limit";
 
 const signInSchema = z.object({
@@ -52,7 +53,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               entityId: user.id,
               afterJson: { reason: "invalid_password" },
             },
-          }).catch((err) => console.error("[audit]", err));
+          }).catch((err) => logger.error("audit.write_failed", {}, err));
           return null;
         }
 
@@ -65,7 +66,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             entityType: "User",
             entityId: user.id,
           },
-        }).catch((err) => console.error("[audit]", err));
+        }).catch((err) => logger.error("audit.write_failed", {}, err));
 
         // Return user data; custom fields are forwarded via jwt/session callbacks.
         return {

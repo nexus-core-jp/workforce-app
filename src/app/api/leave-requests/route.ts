@@ -136,6 +136,18 @@ export async function POST(req: Request) {
     return jsonError(created.error);
   }
 
+  // Audit log
+  prisma.auditLog.create({
+    data: {
+      tenantId,
+      actorUserId: userId,
+      action: "LEAVE_REQUEST_CREATED",
+      entityType: "LeaveRequest",
+      entityId: created.id,
+      afterJson: { type: input.data.type, startAt: input.data.startAt, endAt: input.data.endAt },
+    },
+  }).catch((err) => console.error("[audit]", err));
+
   // Notify admins/approvers
   const TYPE_LABELS: Record<string, string> = { PAID: "有給休暇", HALF: "半休", HOURLY: "時間休", ABSENCE: "欠勤" };
   const typeLabel = TYPE_LABELS[input.data.type] ?? input.data.type;

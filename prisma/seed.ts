@@ -4,6 +4,12 @@ import { PrismaClient, UserRole } from "../src/generated/prisma";
 const prisma = new PrismaClient();
 
 async function main() {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "ABORT: Cannot seed production database! This script is for development/staging only.",
+    );
+  }
+
   const passwordHash = await bcrypt.hash("password123", 10);
 
   // --- Platform tenant + Super Admin ---

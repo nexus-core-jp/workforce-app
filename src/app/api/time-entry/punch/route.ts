@@ -150,5 +150,17 @@ export async function POST(req: Request) {
     },
   });
 
+  // Audit log (fire-and-forget)
+  prisma.auditLog.create({
+    data: {
+      tenantId,
+      actorUserId: userId,
+      action: `PUNCH_${action}`,
+      entityType: "TimeEntry",
+      entityId: updated.id,
+      afterJson: { action, date: today.toISOString() },
+    },
+  }).catch((err) => console.error("[audit]", err));
+
   return NextResponse.json({ ok: true, entry: updated });
 }

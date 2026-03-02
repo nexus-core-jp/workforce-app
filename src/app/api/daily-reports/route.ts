@@ -89,6 +89,20 @@ export async function POST(req: Request) {
     },
   });
 
+  // Audit log for submissions
+  if (shouldSubmit) {
+    prisma.auditLog.create({
+      data: {
+        tenantId,
+        actorUserId: userId,
+        action: "DAILY_REPORT_SUBMITTED",
+        entityType: "DailyReport",
+        entityId: report.id,
+        afterJson: { date: input.data.date },
+      },
+    }).catch((err) => console.error("[audit]", err));
+  }
+
   return NextResponse.json({ ok: true, report });
 }
 

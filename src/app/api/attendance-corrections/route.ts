@@ -65,6 +65,18 @@ export async function POST(req: Request) {
     },
   });
 
+  // Audit log
+  prisma.auditLog.create({
+    data: {
+      tenantId,
+      actorUserId: userId,
+      action: "CORRECTION_REQUESTED",
+      entityType: "AttendanceCorrection",
+      entityId: created.id,
+      afterJson: { date: input.data.date, reason: input.data.reason },
+    },
+  }).catch((err) => console.error("[audit]", err));
+
   // Notify admins/approvers
   const requester = await prisma.user.findUnique({ where: { id: userId }, select: { name: true, email: true } });
   const requesterName = requester?.name ?? requester?.email ?? "ユーザー";

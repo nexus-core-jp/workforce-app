@@ -6,6 +6,7 @@ import {
   isValidDescriptor,
   MAX_DESCRIPTORS_PER_USER,
 } from "@/lib/face-match";
+import { rateLimit } from "@/lib/rate-limit";
 import { toSessionUser } from "@/lib/session";
 import { guardSuspended } from "@/lib/tenant-guard";
 
@@ -26,6 +27,10 @@ export async function POST(req: Request) {
   if (!user) return jsonError("Invalid session", 401);
 
   const { tenantId, id: userId } = user;
+
+  // Rate limit: 5 registrations per user per hour
+  const { limited } = await rateLimit(`face-reg:${userId}`, 5, 60 * 60 * 1000);
+  if (limited) return jsonError("登録試行の上限に達しました。しばらくお待ちください。", 429);
 
   const suspended = await guardSuspended(tenantId);
   if (suspended) return suspended;

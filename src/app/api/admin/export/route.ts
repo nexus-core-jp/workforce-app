@@ -4,6 +4,7 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { toCsv } from "@/lib/csv";
+import { rateLimit } from "@/lib/rate-limit";
 import { toSessionUser } from "@/lib/session";
 import { formatLocal } from "@/lib/time";
 
@@ -32,8 +33,12 @@ export async function GET(req: Request) {
   const user = toSessionUser(session.user as Record<string, unknown>);
   if (!user) return jsonError("Invalid session", 401);
 
-  const { tenantId, role } = user;
+  const { tenantId, id: actorId, role } = user;
   if (role !== "ADMIN" && role !== "APPROVER") return jsonError("Forbidden", 403);
+
+  // Rate limit: 10 exports per user per hour
+  const { limited } = await rateLimit(`export:${actorId}`, 10, 60 * 60 * 1000);
+  if (limited) return jsonError("エクスポートの上限に達しました。しばらくお待ちください。", 429);
 
   const url = new URL(req.url);
   const raw = {
@@ -46,6 +51,18 @@ export async function GET(req: Request) {
 
   const { type, month } = input.data;
   const dateRange = monthRange(month);
+
+  // Audit log: track who exported what
+  prisma.auditLog.create({
+    data: {
+      tenantId,
+      actorUserId: actorId,
+      action: "DATA_EXPORTED",
+      entityType: "Export",
+      entityId: `${type}_${month}`,
+      afterJson: { type, month },
+    },
+  }).catch((err) => console.error("[audit]", err));
 
   if (type === "attendance") {
     const entries = await prisma.timeEntry.findMany({

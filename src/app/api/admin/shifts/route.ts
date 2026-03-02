@@ -70,6 +70,18 @@ export async function POST(req: Request) {
     },
   });
 
+  // Audit log
+  prisma.auditLog.create({
+    data: {
+      tenantId,
+      actorUserId: user.id,
+      action: "SHIFT_PATTERN_CREATED",
+      entityType: "ShiftPattern",
+      entityId: created.id,
+      afterJson: { name: input.data.name, plannedStart: input.data.plannedStart, plannedEnd: input.data.plannedEnd },
+    },
+  }).catch((err) => console.error("[audit]", err));
+
   return NextResponse.json({ ok: true, pattern: created });
 }
 
@@ -94,6 +106,18 @@ export async function DELETE(req: Request) {
   if (!pattern || pattern.tenantId !== tenantId) return jsonError("Not found", 404);
 
   await prisma.shiftPattern.delete({ where: { id } });
+
+  // Audit log
+  prisma.auditLog.create({
+    data: {
+      tenantId,
+      actorUserId: user.id,
+      action: "SHIFT_PATTERN_DELETED",
+      entityType: "ShiftPattern",
+      entityId: id,
+      beforeJson: { name: pattern.name },
+    },
+  }).catch((err) => console.error("[audit]", err));
 
   return NextResponse.json({ ok: true });
 }
