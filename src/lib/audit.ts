@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/db";
 
-export async function writeAuditLog(params: {
+interface AuditEntry {
   tenantId: string;
   actorUserId: string;
   action: string;
@@ -8,16 +8,22 @@ export async function writeAuditLog(params: {
   entityId: string;
   before?: unknown;
   after?: unknown;
-}) {
-  await prisma.auditLog.create({
-    data: {
-      tenantId: params.tenantId,
-      actorUserId: params.actorUserId,
-      action: params.action,
-      entityType: params.entityType,
-      entityId: params.entityId,
-      beforeJson: params.before !== undefined ? (params.before as object) : undefined,
-      afterJson: params.after !== undefined ? (params.after as object) : undefined,
-    },
-  });
+}
+
+export async function writeAuditLog(entry: AuditEntry): Promise<void> {
+  try {
+    await prisma.auditLog.create({
+      data: {
+        tenantId: entry.tenantId,
+        actorUserId: entry.actorUserId,
+        action: entry.action,
+        entityType: entry.entityType,
+        entityId: entry.entityId,
+        beforeJson: entry.before !== undefined ? (entry.before as object) : undefined,
+        afterJson: entry.after !== undefined ? (entry.after as object) : undefined,
+      },
+    });
+  } catch (err) {
+    console.error("[AuditLog] Failed to write audit log:", err);
+  }
 }

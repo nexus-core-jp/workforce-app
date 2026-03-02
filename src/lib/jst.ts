@@ -1,5 +1,4 @@
-const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
-const DAY_MS = 24 * 60 * 60 * 1000;
+import { DAY_MS, JST_OFFSET_MS, TIMEZONE } from "./constants";
 
 export function startOfJstDay(date: Date = new Date()): Date {
   const jstMs = date.getTime() + JST_OFFSET_MS;
@@ -13,12 +12,9 @@ export function addJstDays(date: Date, days: number): Date {
 }
 
 export function toCloseMonth(date: Date): string {
-  // month string in JST: YYYY-MM
-  const ymd = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Tokyo",
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: TIMEZONE,
     year: "numeric",
     month: "2-digit",
   }).format(date);
-  // en-CA returns YYYY-MM
-  return ymd;
 }

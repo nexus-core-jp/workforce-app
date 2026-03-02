@@ -164,6 +164,31 @@ npm run dev
 ### 方法 1: Vercel + Neon (推奨)
 
 最も簡単な構成です。どちらも無料プランがあります。
+50人規模の勤怠管理なら無料枠で運用可能です。
+
+#### アーキテクチャ
+
+```
+[ブラウザ] ──→ [Vercel Edge Network]
+                    │
+            [Next.js App (サーバーレス関数)]
+                    │
+            [Neon WebSocket Adapter]
+                    │
+            [Neon PostgreSQL (サーバーレス)]
+```
+
+- **Vercel**: アクセスがないときはサーバーレス関数がスリープ → コスト0
+- **Neon**: アクセスがないときは DB がスケールダウン → コスト最小化
+- 勤怠アプリは朝・夕方のピーク以外はほぼアイドル → 無料枠で十分
+
+#### コスト目安
+
+| 規模 | Vercel | Neon | 月額合計 |
+|------|--------|------|----------|
+| 個人・検証 | Hobby（無料） | Free | **$0** |
+| ~50人 | Pro（$20） | Free | **$20** |
+| ~200人 | Pro（$20） | Launch（$19） | **$39** |
 
 #### Step 1: Neon でデータベースを作成
 
@@ -173,6 +198,8 @@ npm run dev
    ```
    postgresql://user:pass@ep-xxx.region.aws.neon.tech/neondb?sslmode=require
    ```
+
+> **注意**: `channel_binding=require` が含まれている場合は削除してください。Prisma との互換性の問題があります。
 
 #### Step 2: Vercel にデプロイ
 
@@ -191,7 +218,14 @@ npm run dev
 
 #### Step 3: DB マイグレーション & シード
 
-デプロイ後、ローカルから実行します。
+セットアップスクリプトを使うと、マイグレーション + デモデータ投入が一発で完了します。
+
+```bash
+# ワンステップセットアップ
+./scripts/setup-neon.sh "postgresql://neondb_owner:PASSWORD@ep-xxx-pooler.region.aws.neon.tech/neondb?sslmode=require"
+```
+
+または手動で実行:
 
 ```bash
 # .env の DATABASE_URL を Neon の接続文字列に設定した状態で:
@@ -201,7 +235,17 @@ npm run db:seed
 
 これで本番環境にテーブルとデモデータが作成されます。
 
-#### Step 4 (任意): カスタムドメイン
+#### Step 4: デプロイ後の確認
+
+```bash
+# ヘルスチェック
+curl https://your-app.vercel.app/api/health
+
+# 期待されるレスポンス
+# {"status":"ok","timestamp":"...","database":"connected"}
+```
+
+#### Step 5 (任意): カスタムドメイン
 
 1. Vercel ダッシュボード → Settings → Domains
 2. ドメインを追加し、DNS レコードを設定

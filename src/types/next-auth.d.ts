@@ -11,6 +11,8 @@ declare module "next-auth" {
   interface Session {
     user: {
       id: string;
+      email: string;
+      name?: string | null;
       tenantId: string;
       role: import("@/generated/prisma").UserRole;
       departmentId?: string | null;

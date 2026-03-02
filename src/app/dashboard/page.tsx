@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { logoutWithAudit } from "@/lib/logout-action";
+import { HISTORY_DAYS, LOCALE, DATE_LOCALE, TIMEZONE, PENDING_CORRECTIONS_LIMIT } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { toSessionUser } from "@/lib/session";
 import { addJstDays, formatLocal, startOfJstDay } from "@/lib/time";
@@ -81,14 +82,13 @@ export default async function DashboardPage() {
   const canClockOut = !!clockInAt && !clockOutAt && (!breakStartAt || !!breakEndAt);
 
   const historyMap = new Map(history.map((h) => [h.date.toISOString(), h]));
-  const historyItems = Array.from({ length: 7 }, (_, i) => {
+  const historyItems = Array.from({ length: HISTORY_DAYS }, (_, i) => {
     const d = addJstDays(today, -i);
     const iso = d.toISOString();
     const h = historyMap.get(iso);
 
-    const dateLabel = new Intl.DateTimeFormat("ja-JP", {
-      timeZone: "Asia/Tokyo",
-      year: "numeric",
+    const dateLabel = new Intl.DateTimeFormat(LOCALE, {
+      timeZone: TIMEZONE,
       month: "2-digit",
       day: "2-digit",
       weekday: "short",
@@ -96,8 +96,8 @@ export default async function DashboardPage() {
 
     return {
       dateLabel,
-      dateYmd: new Intl.DateTimeFormat("en-CA", {
-        timeZone: "Asia/Tokyo",
+      dateYmd: new Intl.DateTimeFormat(DATE_LOCALE, {
+        timeZone: TIMEZONE,
         year: "numeric",
         month: "2-digit",
         day: "2-digit",

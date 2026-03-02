@@ -1,13 +1,12 @@
-// Time helpers (JST, date-only semantics)
-
-import { addJstDays, startOfJstDay } from "@/lib/jst";
+import { LOCALE, TIMEZONE } from "./constants";
+import { addJstDays, startOfJstDay } from "./jst";
 
 export { startOfJstDay, addJstDays };
 
 export function formatLocal(dt?: Date | null): string {
   if (!dt) return "-";
-  return new Intl.DateTimeFormat("ja-JP", {
-    timeZone: "Asia/Tokyo",
+  return new Intl.DateTimeFormat(LOCALE, {
+    timeZone: TIMEZONE,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -17,6 +16,13 @@ export function formatLocal(dt?: Date | null): string {
   }).format(dt);
 }
 
-export function diffMinutes(a: Date, b: Date): number {
-  return Math.floor((b.getTime() - a.getTime()) / 60000);
+export function formatTimeOnly(dt?: Date | null): string {
+  if (!dt) return "-";
+  return new Intl.DateTimeFormat(LOCALE, {
+    timeZone: TIMEZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(dt);
 }
+
+export { diffMinutes } from "./work-time";

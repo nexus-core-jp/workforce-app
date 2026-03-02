@@ -6,6 +6,9 @@ import { useCallback, useState } from "react";
 
 import { FaceCamera } from "@/components/FaceCamera";
 
+import { PUNCH_LABELS } from "@/lib/constants";
+import styles from "./dashboard.module.css";
+
 type PunchAction = "CLOCK_IN" | "BREAK_START" | "BREAK_END" | "CLOCK_OUT";
 
 async function punch(
@@ -39,6 +42,7 @@ export function TimeClock(props: {
   faceAuthEnabled?: boolean;
   /** If true, the user has at least one registered face descriptor. */
   faceRegistered?: boolean;
+  onToast?: (text: string, type: "success" | "error") => void;
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -54,17 +58,21 @@ export function TimeClock(props: {
       setError(null);
       setLoading(true);
       try {
-        await punch(action, faceDescriptor);
+        const data = await punch(action, faceDescriptor);
+        const label = data.label ?? PUNCH_LABELS[action] ?? action;
+        props.onToast?.(`${label}しました`, "success");
         router.refresh();
       } catch (e: unknown) {
-        setError(e instanceof Error ? e.message : "打刻に失敗しました");
+        const msg = e instanceof Error ? e.message : "打刻に失敗しました";
+        setError(msg);
+        props.onToast?.(msg, "error");
       } finally {
         setLoading(false);
         setPendingAction(null);
         setConfirmClockOut(false);
       }
     },
-    [router],
+    [router, props],
   );
 
   const handleClick = useCallback(
@@ -160,6 +168,7 @@ export function TimeClock(props: {
           data-variant="primary"
           disabled={!props.canClockIn || loading}
           onClick={() => handleClick("CLOCK_IN")}
+          aria-busy={loading}
         >
           {loading ? "処理中..." : "出勤"}
         </button>
@@ -181,6 +190,7 @@ export function TimeClock(props: {
               data-variant="danger"
               disabled={loading}
               onClick={() => handleClick("CLOCK_OUT")}
+              aria-busy={loading}
             >
               {loading ? "処理中..." : "退勤する"}
             </button>

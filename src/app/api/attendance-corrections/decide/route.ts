@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { Prisma } from "@/generated/prisma";
 import { auth } from "@/auth";
+import { ERROR_MESSAGES } from "@/lib/constants";
 import { jsonError } from "@/lib/api";
 import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/db";
@@ -32,11 +33,11 @@ export async function POST(req: Request) {
 
   const raw = await req.json().catch(() => null);
   const input = schema.safeParse(raw);
-  if (!input.success) return jsonError(input.error.message);
+  if (!input.success) return jsonError(ERROR_MESSAGES.INVALID_INPUT);
 
   const correction = await prisma.attendanceCorrection.findUnique({ where: { id: input.data.id } });
-  if (!correction || correction.tenantId !== tenantId) return jsonError("Not found", 404);
-  if (correction.status !== "PENDING") return jsonError("Already decided", 409);
+  if (!correction || correction.tenantId !== tenantId) return jsonError(ERROR_MESSAGES.NOT_FOUND, 404);
+  if (correction.status !== "PENDING") return jsonError(ERROR_MESSAGES.ALREADY_DECIDED, 409);
 
   // Prevent self-approval
   if (correction.userId === approverUserId) {

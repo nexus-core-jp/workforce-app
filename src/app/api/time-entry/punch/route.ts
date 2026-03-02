@@ -1,39 +1,20 @@
 import { NextResponse } from "next/server";
 
-import { auth } from "@/auth";
-import { jsonError } from "@/lib/api";
+import { ERROR_MESSAGES } from "@/lib/constants";
+import { jsonError, requireAuth } from "@/lib/api";
 import { isMonthClosed } from "@/lib/close";
 import { prisma } from "@/lib/db";
 import { findBestMatch, isValidDescriptor } from "@/lib/face-match";
-import { toSessionUser } from "@/lib/session";
 import { guardSuspended } from "@/lib/tenant-guard";
-import { diffMinutes, startOfJstDay } from "@/lib/time";
+import { startOfJstDay } from "@/lib/time";
+import { computeWorkMinutes } from "@/lib/work-time";
 
 type PunchAction = "CLOCK_IN" | "BREAK_START" | "BREAK_END" | "CLOCK_OUT";
 
-function computeWorkMinutes(entry: {
-  clockInAt: Date | null;
-  clockOutAt: Date | null;
-  breakStartAt: Date | null;
-  breakEndAt: Date | null;
-}): number {
-  if (!entry.clockInAt || !entry.clockOutAt) return 0;
-  const total = diffMinutes(entry.clockInAt, entry.clockOutAt);
-  let breakMin = 0;
-  if (entry.breakStartAt && entry.breakEndAt) {
-    breakMin = Math.max(0, diffMinutes(entry.breakStartAt, entry.breakEndAt));
-  }
-  return Math.max(0, total - breakMin);
-}
-
 export async function POST(req: Request) {
-  const session = await auth();
-  if (!session?.user) return jsonError("Unauthorized", 401);
-
-  const user = toSessionUser(session.user as Record<string, unknown>);
-  if (!user) return jsonError("Invalid session", 401);
-
-  const { tenantId, id: userId } = user;
+  const result = await requireAuth();
+  if (!result.ok) return result.response;
+  const { id: userId, tenantId } = result.user;
 
   const suspended = await guardSuspended(tenantId);
   if (suspended) return suspended;
@@ -46,13 +27,13 @@ export async function POST(req: Request) {
   }
 
   const action = body?.action as PunchAction | undefined;
-  if (!action) return jsonError("Missing action");
+  if (!action) return jsonError(ERROR_MESSAGES.MISSING_ACTION);
 
   const today = startOfJstDay(new Date());
   const now = new Date();
 
   if (await isMonthClosed(tenantId, today)) {
-    return jsonError("This month is closed", 409);
+    return jsonError(ERROR_MESSAGES.MONTH_CLOSED, 409);
   }
 
   // Face verification when enabled (required for CLOCK_IN and CLOCK_OUT)
@@ -80,12 +61,12 @@ export async function POST(req: Request) {
         );
       }
 
-      const result = findBestMatch(
+      const faceResult = findBestMatch(
         faceDescriptor,
         stored.map((s) => s.descriptor as number[]),
       );
 
-      if (!result.matched) {
+      if (!faceResult.matched) {
         return jsonError("顔認証に失敗しました", 403);
       }
     }
@@ -103,34 +84,31 @@ export async function POST(req: Request) {
     breakStartAt?: Date | null;
     breakEndAt?: Date | null;
     clockOutAt?: Date | null;
-    workMinutes?: number;
   } = {};
 
-  // Basic state machine
   if (action === "CLOCK_IN") {
-    if (entry.clockInAt) return jsonError("Already clocked in", 409);
+    if (entry.clockInAt) return jsonError(ERROR_MESSAGES.ALREADY_CLOCKED_IN, 409);
     next.clockInAt = now;
   }
 
   if (action === "BREAK_START") {
-    if (!entry.clockInAt) return jsonError("Not clocked in", 409);
-    if (entry.clockOutAt) return jsonError("Already clocked out", 409);
-    if (entry.breakStartAt && !entry.breakEndAt) return jsonError("Break already started", 409);
-    // allow multiple breaks later; for MVP we only support one.
-    if (entry.breakStartAt && entry.breakEndAt) return jsonError("Break already finished (MVP supports one break)", 409);
+    if (!entry.clockInAt) return jsonError(ERROR_MESSAGES.NOT_CLOCKED_IN, 409);
+    if (entry.clockOutAt) return jsonError(ERROR_MESSAGES.ALREADY_CLOCKED_OUT, 409);
+    if (entry.breakStartAt && !entry.breakEndAt) return jsonError(ERROR_MESSAGES.BREAK_ALREADY_STARTED, 409);
+    if (entry.breakStartAt && entry.breakEndAt) return jsonError(ERROR_MESSAGES.BREAK_ALREADY_FINISHED, 409);
     next.breakStartAt = now;
   }
 
   if (action === "BREAK_END") {
-    if (!entry.breakStartAt) return jsonError("Break not started", 409);
-    if (entry.breakEndAt) return jsonError("Break already ended", 409);
+    if (!entry.breakStartAt) return jsonError(ERROR_MESSAGES.BREAK_NOT_STARTED, 409);
+    if (entry.breakEndAt) return jsonError(ERROR_MESSAGES.BREAK_ALREADY_ENDED, 409);
     next.breakEndAt = now;
   }
 
   if (action === "CLOCK_OUT") {
-    if (!entry.clockInAt) return jsonError("Not clocked in", 409);
-    if (entry.clockOutAt) return jsonError("Already clocked out", 409);
-    if (entry.breakStartAt && !entry.breakEndAt) return jsonError("Break in progress", 409);
+    if (!entry.clockInAt) return jsonError(ERROR_MESSAGES.NOT_CLOCKED_IN, 409);
+    if (entry.clockOutAt) return jsonError(ERROR_MESSAGES.ALREADY_CLOCKED_OUT, 409);
+    if (entry.breakStartAt && !entry.breakEndAt) return jsonError(ERROR_MESSAGES.BREAK_IN_PROGRESS, 409);
     next.clockOutAt = now;
   }
 
