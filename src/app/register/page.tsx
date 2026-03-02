@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 function getPasswordStrength(pw: string): { score: number; label: string; color: string } {
   let score = 0;
@@ -18,10 +18,36 @@ function getPasswordStrength(pw: string): { score: number; label: string; color:
   return { score, label: "強い", color: "var(--color-success)" };
 }
 
+const LINE_ERROR_MESSAGES: Record<string, string> = {
+  LINE_DENIED: "LINE認証がキャンセルされました。",
+  LINE_ALREADY_USED: "このLINEアカウントは既に別の会社に紐づいています。",
+  MISSING_DATA: "登録情報の取得に失敗しました。もう一度入力してください。",
+  INVALID_DATA: "登録情報が正しくありません。もう一度入力してください。",
+  INVALID_STATE: "セッションの有効期限が切れました。もう一度お試しください。",
+  LINE_TOKEN_ERROR: "LINE認証に失敗しました。もう一度お試しください。",
+};
+
+function isValidEmail(v: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+}
+
+function isValidSlug(v: string): boolean {
+  return /^[a-z0-9_-]+$/.test(v);
+}
+
 type AuthMode = "password" | "line";
 
 export default function RegisterPage() {
+  return (
+    <Suspense>
+      <RegisterForm />
+    </Suspense>
+  );
+}
+
+function RegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [companyName, setCompanyName] = useState("");
   const [slug, setSlug] = useState("");
   const [adminName, setAdminName] = useState("");
@@ -30,6 +56,19 @@ export default function RegisterPage() {
   const [authMode, setAuthMode] = useState<AuthMode>("password");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Track which fields the user has interacted with (for inline validation)
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+
+  const markTouched = (field: string) =>
+    setTouched((prev) => ({ ...prev, [field]: true }));
+
+  // Show errors from LINE OAuth redirects
+  useEffect(() => {
+    const errParam = searchParams.get("error");
+    if (errParam) {
+      setError(LINE_ERROR_MESSAGES[errParam] ?? decodeURIComponent(errParam));
+    }
+  }, [searchParams]);
 
   const strength = useMemo(() => getPasswordStrength(password), [password]);
   const hasLower = /[a-z]/.test(password);
@@ -38,25 +77,57 @@ export default function RegisterPage() {
   const hasLength = password.length >= 8;
   const passwordValid = hasLength && hasLower && hasUpper && hasDigit;
 
-  // For LINE-only registration, password is not required
+  // Validation checks
+  const emailValid = email.trim() === "" || isValidEmail(email);
+  const slugValid = slug.trim() === "" || (slug.length >= 2 && isValidSlug(slug));
+
+  const allFieldsFilled =
+    companyName.trim() !== "" &&
+    slug.trim() !== "" && slug.length >= 2 &&
+    adminName.trim() !== "" &&
+    email.trim() !== "" && isValidEmail(email);
+
   const canSubmit = authMode === "line"
-    ? companyName.trim() !== "" && slug.trim() !== "" && adminName.trim() !== "" && email.trim() !== ""
-    : passwordValid;
+    ? allFieldsFilled
+    : allFieldsFilled && passwordValid;
 
   const handleSubmit = async () => {
     setError(null);
+
+    // Pre-submit validation with specific messages
+    if (!allFieldsFilled) {
+      const missing: string[] = [];
+      if (!companyName.trim()) missing.push("会社名");
+      if (!slug.trim() || slug.length < 2) missing.push("会社ID");
+      if (!adminName.trim()) missing.push("管理者名");
+      if (!email.trim()) missing.push("メールアドレス");
+      else if (!isValidEmail(email)) {
+        setError("メールアドレスの形式が正しくありません");
+        return;
+      }
+      if (missing.length > 0) {
+        setError(`${missing.join("、")}を入力してください`);
+        return;
+      }
+    }
+    if (!slugValid) {
+      setError("会社IDは半角英数字・ハイフン・アンダースコアのみ使用できます");
+      return;
+    }
+    if (authMode === "password" && !passwordValid) {
+      setError("パスワードの要件を満たしていません");
+      return;
+    }
+
     setLoading(true);
     try {
       if (authMode === "line") {
-        // LINE registration: store company info in cookie, redirect to LINE OAuth
-        // The LINE callback will create the company + user
         const regData = { companyName, slug, adminName, email };
         document.cookie = `line_register=${encodeURIComponent(JSON.stringify(regData))}; path=/; max-age=600; SameSite=Lax`;
         window.location.href = "/api/line/link?mode=register";
-        return; // page navigates away
+        return;
       }
 
-      // Standard email+password registration
       const res = await fetch("/api/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -66,7 +137,7 @@ export default function RegisterPage() {
       if (!res.ok) {
         setError(data.error ?? "登録に失敗しました");
       } else {
-        router.push("/login");
+        router.push("/login?registered=true");
       }
     } catch {
       setError("ネットワークエラーが発生しました。接続を確認してください。");
@@ -74,6 +145,11 @@ export default function RegisterPage() {
       setLoading(false);
     }
   };
+
+  const hintStyle = (valid: boolean) => ({
+    fontSize: 12,
+    color: valid ? "var(--color-text-secondary)" : "var(--color-danger)",
+  });
 
   return (
     <main
@@ -113,10 +189,14 @@ export default function RegisterPage() {
               <input
                 value={companyName}
                 onChange={(e) => setCompanyName(e.target.value)}
+                onBlur={() => markTouched("companyName")}
                 required
                 placeholder="例: 株式会社サンプル"
                 autoComplete="organization"
               />
+              {touched.companyName && !companyName.trim() && (
+                <span style={hintStyle(false)}>会社名は必須です</span>
+              )}
             </label>
 
             <label style={{ display: "grid", gap: 6 }}>
@@ -124,14 +204,19 @@ export default function RegisterPage() {
               <input
                 value={slug}
                 onChange={(e) => setSlug(e.target.value.toLowerCase())}
+                onBlur={() => markTouched("slug")}
                 required
                 pattern="^[a-z0-9_-]+$"
                 placeholder="例: sample-corp"
                 autoComplete="off"
               />
-              <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
-                半角英数字・ハイフン・アンダースコアのみ
-              </span>
+              {touched.slug && slug.trim() !== "" && !slugValid ? (
+                <span style={hintStyle(false)}>半角英数字・ハイフン・アンダースコアのみ（2文字以上）</span>
+              ) : (
+                <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
+                  半角英数字・ハイフン・アンダースコアのみ
+                </span>
+              )}
             </label>
 
             <label style={{ display: "grid", gap: 6 }}>
@@ -139,10 +224,14 @@ export default function RegisterPage() {
               <input
                 value={adminName}
                 onChange={(e) => setAdminName(e.target.value)}
+                onBlur={() => markTouched("adminName")}
                 required
                 placeholder="例: 山田太郎"
                 autoComplete="name"
               />
+              {touched.adminName && !adminName.trim() && (
+                <span style={hintStyle(false)}>管理者名は必須です</span>
+              )}
             </label>
 
             <label style={{ display: "grid", gap: 6 }}>
@@ -150,10 +239,14 @@ export default function RegisterPage() {
               <input
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                onBlur={() => markTouched("email")}
                 type="email"
                 required
                 autoComplete="email"
               />
+              {touched.email && email.trim() !== "" && !emailValid && (
+                <span style={hintStyle(false)}>メールアドレスの形式が正しくありません</span>
+              )}
             </label>
 
             {/* Auth mode selector */}
