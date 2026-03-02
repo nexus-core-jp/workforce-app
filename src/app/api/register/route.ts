@@ -5,6 +5,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { sendRegistrationNotification } from "@/lib/email";
 import { passwordSchema } from "@/lib/password";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 const registerSchema = z.object({
   companyName: z.string().min(1, "会社名は必須です"),
@@ -19,6 +20,16 @@ const registerSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  // Rate limit: 3 registrations per 30 minutes per IP
+  const ip = getClientIp(request);
+  const rl = checkRateLimit(`register:${ip}`, { max: 3, windowSec: 1800 });
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "リクエストが多すぎます。しばらく待ってから再度お試しください。" },
+      { status: 429, headers: { "Retry-After": String(Math.ceil((rl.resetAt - Date.now()) / 1000)) } },
+    );
+  }
+
   try {
     const body = await request.json();
     const parsed = registerSchema.safeParse(body);

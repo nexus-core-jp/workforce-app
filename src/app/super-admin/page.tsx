@@ -142,7 +142,9 @@ export default async function SuperAdminPage() {
         />
 
         {/* Navigation */}
-        <nav style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+        <nav style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+          <Link href="/super-admin/revenue">収益ダッシュボード</Link>
+          <Link href="/super-admin/coupons">クーポン管理</Link>
           <Link href="/super-admin/audit-logs">監査ログ</Link>
         </nav>
 

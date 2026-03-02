@@ -2,11 +2,15 @@
 
 const BOM = "\uFEFF";
 
-/** Escape a single CSV value: wrap in double-quotes if it contains comma, newline, or double-quote. */
+/** Escape a single CSV value: wrap in double-quotes if it contains comma, newline, or double-quote.
+ *  Also prevent CSV formula injection (=, +, -, @, \t, \r at start of cell). */
 export function escapeCsvValue(value: unknown): string {
   const s = value == null ? "" : String(value);
-  if (s.includes('"') || s.includes(",") || s.includes("\n") || s.includes("\r")) {
-    return `"${s.replace(/"/g, '""')}"`;
+  // Prevent CSV injection: cells starting with formula characters get a leading apostrophe
+  const needsFormulaEscape = /^[=+\-@\t\r]/.test(s);
+  if (needsFormulaEscape || s.includes('"') || s.includes(",") || s.includes("\n") || s.includes("\r")) {
+    const escaped = s.replace(/"/g, '""');
+    return `"${needsFormulaEscape ? "'" : ""}${escaped}"`;
   }
   return s;
 }

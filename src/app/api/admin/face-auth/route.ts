@@ -1,13 +1,15 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 
 import { auth } from "@/auth";
+import { jsonError } from "@/lib/api";
 import { prisma } from "@/lib/db";
 import { toSessionUser } from "@/lib/session";
 import { guardSuspended } from "@/lib/tenant-guard";
 
-function jsonError(message: string, status = 400) {
-  return NextResponse.json({ ok: false, error: message }, { status });
-}
+const schema = z.object({
+  enabled: z.boolean(),
+});
 
 /**
  * GET /api/admin/face-auth
@@ -47,53 +49,36 @@ export async function GET() {
   });
 }
 
-/**
- * PATCH /api/admin/face-auth
- * Toggle face authentication on/off for the tenant.
- * Body: { enabled: boolean }
- */
+/** PATCH: Toggle face auth for the tenant */
 export async function PATCH(req: Request) {
   const session = await auth();
   if (!session?.user) return jsonError("Unauthorized", 401);
 
   const user = toSessionUser(session.user as Record<string, unknown>);
-  if (!user) return jsonError("Invalid session", 401);
-
-  if (user.role !== "ADMIN") {
-    return jsonError("Forbidden", 403);
-  }
+  if (!user || user.role !== "ADMIN") return jsonError("Forbidden", 403);
 
   const suspended = await guardSuspended(user.tenantId);
   if (suspended) return suspended;
 
-  let body: Record<string, unknown>;
-  try {
-    body = await req.json();
-  } catch {
-    return jsonError("Invalid request body");
-  }
-
-  const enabled = body?.enabled;
-  if (typeof enabled !== "boolean") {
-    return jsonError("Missing or invalid 'enabled' field (boolean required)");
-  }
+  const raw = await req.json().catch(() => null);
+  const input = schema.safeParse(raw);
+  if (!input.success) return jsonError("Invalid input");
 
   await prisma.tenant.update({
     where: { id: user.tenantId },
-    data: { faceAuthEnabled: enabled },
+    data: { faceAuthEnabled: input.data.enabled },
   });
 
-  // Audit log
   await prisma.auditLog.create({
     data: {
       tenantId: user.tenantId,
       actorUserId: user.id,
-      action: enabled ? "FACE_AUTH_ENABLED" : "FACE_AUTH_DISABLED",
+      action: input.data.enabled ? "FACE_AUTH_ENABLED" : "FACE_AUTH_DISABLED",
       entityType: "Tenant",
       entityId: user.tenantId,
-      afterJson: { faceAuthEnabled: enabled },
+      afterJson: { faceAuthEnabled: input.data.enabled },
     },
   });
 
-  return NextResponse.json({ ok: true, faceAuthEnabled: enabled });
+  return NextResponse.json({ ok: true, faceAuthEnabled: input.data.enabled });
 }

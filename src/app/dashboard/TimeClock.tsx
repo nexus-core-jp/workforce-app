@@ -43,6 +43,7 @@ export function TimeClock(props: {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmClockOut, setConfirmClockOut] = useState(false);
 
   // When face auth is needed, we show the camera and remember which action
   // triggered it.
@@ -60,6 +61,7 @@ export function TimeClock(props: {
       } finally {
         setLoading(false);
         setPendingAction(null);
+        setConfirmClockOut(false);
       }
     },
     [router],
@@ -72,13 +74,21 @@ export function TimeClock(props: {
           setError("顔が未登録です。先に顔登録を行ってください。");
           return;
         }
+        // For clock-out, require confirmation first, then face auth
+        if (action === "CLOCK_OUT" && !confirmClockOut) {
+          setConfirmClockOut(true);
+          return;
+        }
         // Show camera for face verification
         setPendingAction(action);
+      } else if (action === "CLOCK_OUT" && !confirmClockOut) {
+        // Clock-out confirmation even without face auth
+        setConfirmClockOut(true);
       } else {
         executePunch(action);
       }
     },
-    [props.faceAuthEnabled, props.faceRegistered, executePunch],
+    [props.faceAuthEnabled, props.faceRegistered, executePunch, confirmClockOut],
   );
 
   const handleFaceDescriptor = useCallback(
@@ -165,13 +175,32 @@ export function TimeClock(props: {
         >
           休憩終了
         </button>
-        <button
-          data-variant="danger"
-          disabled={!props.canClockOut || loading}
-          onClick={() => handleClick("CLOCK_OUT")}
-        >
-          退勤
-        </button>
+        {confirmClockOut ? (
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <button
+              data-variant="danger"
+              disabled={loading}
+              onClick={() => handleClick("CLOCK_OUT")}
+            >
+              {loading ? "処理中..." : "退勤する"}
+            </button>
+            <button
+              className="btn-compact"
+              disabled={loading}
+              onClick={() => setConfirmClockOut(false)}
+            >
+              キャンセル
+            </button>
+          </div>
+        ) : (
+          <button
+            data-variant="danger"
+            disabled={!props.canClockOut || loading}
+            onClick={() => handleClick("CLOCK_OUT")}
+          >
+            退勤
+          </button>
+        )}
       </div>
       {error && <p className="error-text">エラー: {error}</p>}
     </section>

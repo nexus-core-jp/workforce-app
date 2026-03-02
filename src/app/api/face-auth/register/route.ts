@@ -1,23 +1,19 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 
 import { auth } from "@/auth";
+import { jsonError } from "@/lib/api";
 import { prisma } from "@/lib/db";
-import {
-  isValidDescriptor,
-  MAX_DESCRIPTORS_PER_USER,
-} from "@/lib/face-match";
+import { MAX_DESCRIPTORS_PER_USER } from "@/lib/face-match";
 import { toSessionUser } from "@/lib/session";
 import { guardSuspended } from "@/lib/tenant-guard";
 
-function jsonError(message: string, status = 400) {
-  return NextResponse.json({ ok: false, error: message }, { status });
-}
+const schema = z.object({
+  descriptor: z.array(z.number()).length(128),
+  label: z.string().max(50).optional(),
+});
 
-/**
- * POST /api/face-auth/register
- * Register a face descriptor for the authenticated user.
- * Body: { descriptor: number[] }   — 128-dimensional float array
- */
+/** POST: Register a face descriptor for the current user */
 export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user) return jsonError("Unauthorized", 401);
@@ -30,7 +26,7 @@ export async function POST(req: Request) {
   const suspended = await guardSuspended(tenantId);
   if (suspended) return suspended;
 
-  // Ensure face auth is enabled for this tenant
+  // Check face auth is enabled for this tenant
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
     select: { faceAuthEnabled: true },
@@ -39,21 +35,11 @@ export async function POST(req: Request) {
     return jsonError("Face authentication is not enabled for this tenant", 403);
   }
 
-  let body: Record<string, unknown>;
-  try {
-    body = await req.json();
-  } catch {
-    return jsonError("Invalid request body");
-  }
+  const raw = await req.json().catch(() => null);
+  const input = schema.safeParse(raw);
+  if (!input.success) return jsonError(input.error.issues.map((e) => e.message).join(", "));
 
-  const descriptor = body?.descriptor;
-  if (!isValidDescriptor(descriptor)) {
-    return jsonError(
-      "Invalid descriptor: expected a 128-element number array",
-    );
-  }
-
-  // Check max descriptors per user
+  // Limit descriptors per user
   const count = await prisma.faceDescriptor.count({
     where: { tenantId, userId },
   });
@@ -64,22 +50,36 @@ export async function POST(req: Request) {
     );
   }
 
-  const record = await prisma.faceDescriptor.create({
-    data: { tenantId, userId, descriptor },
+  const fd = await prisma.faceDescriptor.create({
+    data: {
+      tenantId,
+      userId,
+      descriptor: JSON.stringify(input.data.descriptor),
+      label: input.data.label ?? null,
+    },
   });
 
-  return NextResponse.json({
-    ok: true,
-    id: record.id,
-    count: count + 1,
-  });
+  return NextResponse.json({ ok: true, id: fd.id, count: count + 1 });
 }
 
-/**
- * DELETE /api/face-auth/register
- * Delete a specific face descriptor.
- * Body: { id: string }
- */
+/** GET: List my face descriptors */
+export async function GET() {
+  const session = await auth();
+  if (!session?.user) return jsonError("Unauthorized", 401);
+
+  const user = toSessionUser(session.user as Record<string, unknown>);
+  if (!user) return jsonError("Invalid session", 401);
+
+  const descriptors = await prisma.faceDescriptor.findMany({
+    where: { tenantId: user.tenantId, userId: user.id },
+    select: { id: true, label: true, createdAt: true },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return NextResponse.json({ ok: true, descriptors });
+}
+
+/** DELETE: Remove a face descriptor */
 export async function DELETE(req: Request) {
   const session = await auth();
   if (!session?.user) return jsonError("Unauthorized", 401);
@@ -89,22 +89,12 @@ export async function DELETE(req: Request) {
 
   const { tenantId, id: userId } = user;
 
-  let body: Record<string, unknown>;
-  try {
-    body = await req.json();
-  } catch {
-    return jsonError("Invalid request body");
-  }
-
-  const descriptorId = body?.id;
-  if (typeof descriptorId !== "string") {
-    return jsonError("Missing descriptor id");
-  }
+  const raw = await req.json().catch(() => null);
+  const id = raw?.id;
+  if (typeof id !== "string") return jsonError("Missing descriptor id");
 
   // Ensure the descriptor belongs to this user (or caller is admin)
-  const existing = await prisma.faceDescriptor.findUnique({
-    where: { id: descriptorId },
-  });
+  const existing = await prisma.faceDescriptor.findUnique({ where: { id } });
   if (!existing || existing.tenantId !== tenantId) {
     return jsonError("Descriptor not found", 404);
   }
@@ -112,7 +102,6 @@ export async function DELETE(req: Request) {
     return jsonError("Forbidden", 403);
   }
 
-  await prisma.faceDescriptor.delete({ where: { id: descriptorId } });
-
+  await prisma.faceDescriptor.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 }

@@ -3,14 +3,11 @@ import { z } from "zod";
 
 import { auth } from "@/auth";
 import { isMonthClosed } from "@/lib/close";
+import { jsonError } from "@/lib/api";
 import { prisma } from "@/lib/db";
 import { toSessionUser } from "@/lib/session";
 import { guardSuspended } from "@/lib/tenant-guard";
 import { startOfJstDay } from "@/lib/time";
-
-function jsonError(message: string, status = 400) {
-  return NextResponse.json({ ok: false, error: message }, { status });
-}
 
 const upsertSchema = z.object({
   date: z.string().min(10),
@@ -61,35 +58,40 @@ export async function POST(req: Request) {
     return jsonError("既に提出済みです", 409);
   }
 
-  const report = await prisma.dailyReport.upsert({
-    where: { tenantId_userId_date: { tenantId, userId, date } },
-    create: {
-      tenantId,
-      userId,
-      date,
-      route: input.data.route ?? null,
-      cases: input.data.cases ?? null,
-      workHoursText: input.data.workHoursText ?? null,
-      incidentsText: input.data.incidentsText ?? null,
-      notesText: input.data.notesText ?? null,
-      announcementsText: input.data.announcementsText ?? null,
-      status: shouldSubmit ? "SUBMITTED" : "DRAFT",
-      submittedAt: shouldSubmit ? new Date() : null,
-    },
-    update: {
-      route: input.data.route ?? null,
-      cases: input.data.cases ?? null,
-      workHoursText: input.data.workHoursText ?? null,
-      incidentsText: input.data.incidentsText ?? null,
-      notesText: input.data.notesText ?? null,
-      announcementsText: input.data.announcementsText ?? null,
-      ...(shouldSubmit
-        ? { status: "SUBMITTED", submittedAt: new Date() }
-        : {}),
-    },
-  });
+  try {
+    const report = await prisma.dailyReport.upsert({
+      where: { tenantId_userId_date: { tenantId, userId, date } },
+      create: {
+        tenantId,
+        userId,
+        date,
+        route: input.data.route ?? null,
+        cases: input.data.cases ?? null,
+        workHoursText: input.data.workHoursText ?? null,
+        incidentsText: input.data.incidentsText ?? null,
+        notesText: input.data.notesText ?? null,
+        announcementsText: input.data.announcementsText ?? null,
+        status: shouldSubmit ? "SUBMITTED" : "DRAFT",
+        submittedAt: shouldSubmit ? new Date() : null,
+      },
+      update: {
+        route: input.data.route ?? null,
+        cases: input.data.cases ?? null,
+        workHoursText: input.data.workHoursText ?? null,
+        incidentsText: input.data.incidentsText ?? null,
+        notesText: input.data.notesText ?? null,
+        announcementsText: input.data.announcementsText ?? null,
+        ...(shouldSubmit
+          ? { status: "SUBMITTED", submittedAt: new Date() }
+          : {}),
+      },
+    });
 
-  return NextResponse.json({ ok: true, report });
+    return NextResponse.json({ ok: true, report });
+  } catch (err) {
+    console.error("[daily-reports] DB error:", err);
+    return jsonError("日報の保存に失敗しました。再度お試しください。", 500);
+  }
 }
 
 /** GET: Fetch daily reports for the authenticated user */

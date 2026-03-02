@@ -4,8 +4,7 @@ import { z } from "zod";
 
 import { prisma } from "@/lib/db";
 import { sendPasswordResetEmail } from "@/lib/email";
-import { extractClientIp } from "@/lib/ip";
-import { rateLimit } from "@/lib/rate-limit";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
 const schema = z.object({
   tenant: z.string().min(1),
@@ -13,12 +12,13 @@ const schema = z.object({
 });
 
 export async function POST(request: Request) {
-  const ip = extractClientIp(request);
-  const { limited } = await rateLimit(`forgot:${ip}`, 5, 15 * 60 * 1000); // 5 requests per 15 min
-  if (limited) {
+  // Rate limit: 5 requests per 15 minutes per IP
+  const ip = getClientIp(request);
+  const rl = checkRateLimit(`forgot-pw:${ip}`, { max: 5, windowSec: 900 });
+  if (!rl.allowed) {
     return NextResponse.json(
-      { error: "リクエストが多すぎます。しばらくしてから再試行してください。" },
-      { status: 429 },
+      { error: "リクエストが多すぎます。しばらく待ってから再度お試しください。" },
+      { status: 429, headers: { "Retry-After": String(Math.ceil((rl.resetAt - Date.now()) / 1000)) } },
     );
   }
 

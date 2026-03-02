@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { auth } from "@/auth";
+import { jsonError } from "@/lib/api";
 import { isMonthClosed } from "@/lib/close";
 import { prisma } from "@/lib/db";
 import { findBestMatch, isValidDescriptor } from "@/lib/face-match";
@@ -9,10 +10,6 @@ import { guardSuspended } from "@/lib/tenant-guard";
 import { diffMinutes, startOfJstDay } from "@/lib/time";
 
 type PunchAction = "CLOCK_IN" | "BREAK_START" | "BREAK_END" | "CLOCK_OUT";
-
-function jsonError(message: string, status = 400) {
-  return NextResponse.json({ ok: false, error: message }, { status });
-}
 
 function computeWorkMinutes(entry: {
   clockInAt: Date | null;
@@ -137,18 +134,23 @@ export async function POST(req: Request) {
     next.clockOutAt = now;
   }
 
-  const updated = await prisma.timeEntry.update({
-    where: { id: entry.id },
-    data: {
-      ...next,
-      workMinutes: computeWorkMinutes({
-        clockInAt: next.clockInAt ?? entry.clockInAt,
-        clockOutAt: next.clockOutAt ?? entry.clockOutAt,
-        breakStartAt: next.breakStartAt ?? entry.breakStartAt,
-        breakEndAt: next.breakEndAt ?? entry.breakEndAt,
-      }),
-    },
-  });
+  try {
+    const updated = await prisma.timeEntry.update({
+      where: { id: entry.id },
+      data: {
+        ...next,
+        workMinutes: computeWorkMinutes({
+          clockInAt: next.clockInAt ?? entry.clockInAt,
+          clockOutAt: next.clockOutAt ?? entry.clockOutAt,
+          breakStartAt: next.breakStartAt ?? entry.breakStartAt,
+          breakEndAt: next.breakEndAt ?? entry.breakEndAt,
+        }),
+      },
+    });
 
-  return NextResponse.json({ ok: true, entry: updated });
+    return NextResponse.json({ ok: true, entry: updated });
+  } catch (err) {
+    console.error("[time-entry/punch] DB error:", err);
+    return jsonError("打刻の保存に失敗しました。再度お試しください。", 500);
+  }
 }

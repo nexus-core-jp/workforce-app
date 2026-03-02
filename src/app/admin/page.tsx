@@ -33,12 +33,6 @@ export default async function AdminPage() {
     redirect("/dashboard");
   }
 
-  // Fetch tenant for trial info and face auth
-  const tenant = await prisma.tenant.findUnique({
-    where: { id: tenantId },
-    select: { plan: true, trialEndsAt: true, faceAuthEnabled: true },
-  });
-
   const today = startOfJstDay(new Date());
   const month = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Tokyo",
@@ -48,6 +42,7 @@ export default async function AdminPage() {
 
   // Parallelize independent DB queries for performance
   const [
+    tenant,
     companyClose,
     pendingCorrections,
     recentDailyReports,
@@ -60,6 +55,11 @@ export default async function AdminPage() {
     todayLeaves,
     allLedgerEntries,
   ] = await Promise.all([
+    // Fetch tenant for trial info, face auth, and slug
+    prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { plan: true, trialEndsAt: true, faceAuthEnabled: true, slug: true },
+    }),
     // Monthly close status (ADMIN only)
     role === "ADMIN"
       ? prisma.close.findUnique({
@@ -72,7 +72,7 @@ export default async function AdminPage() {
             },
           },
         })
-      : null,
+      : Promise.resolve(null),
     // Pending correction requests
     prisma.attendanceCorrection.findMany({
       where: { tenantId, status: "PENDING" },
@@ -231,17 +231,6 @@ export default async function AdminPage() {
     };
   });
 
-  // Face auth: count of users with registered descriptors (ADMIN only)
-  const faceAuthRegisteredUsers =
-    role === "ADMIN" && tenant?.faceAuthEnabled
-      ? (
-          await prisma.faceDescriptor.groupBy({
-            by: ["userId"],
-            where: { tenantId },
-          })
-        ).length
-      : 0;
-
   const roleLabel = role === "ADMIN" ? "管理者" : "承認者";
 
   return (
@@ -293,6 +282,9 @@ export default async function AdminPage() {
           <Link href="/dashboard">← マイページ</Link>
           {role === "ADMIN" && <Link href="/admin/members">メンバー管理</Link>}
           {role === "ADMIN" && <Link href="/admin/shifts">シフト管理</Link>}
+          {role === "ADMIN" && <Link href="/admin/payroll">給与設定</Link>}
+          {role === "ADMIN" && <Link href="/admin/payroll/calc">給与計算</Link>}
+          {role === "ADMIN" && <Link href="/admin/holidays">休日カレンダー</Link>}
           {role === "ADMIN" && <Link href="/admin/billing">プラン・請求</Link>}
           {role === "ADMIN" && <Link href="/admin/audit-logs">監査ログ</Link>}
         </nav>
@@ -345,15 +337,6 @@ export default async function AdminPage() {
         {/* CSV Export */}
         <ExportPanel defaultMonth={month} />
 
-        {/* Face Auth Toggle — ADMIN only */}
-        {role === "ADMIN" && (
-          <FaceAuthToggle
-            enabled={tenant?.faceAuthEnabled ?? false}
-            registeredUsers={faceAuthRegisteredUsers}
-            totalUsers={allMembers.length}
-          />
-        )}
-
         {/* Leave request approvals */}
         <AdminLeaveRequests items={pendingLeavesUi} />
 
@@ -362,6 +345,14 @@ export default async function AdminPage() {
 
         {/* Submitted daily reports */}
         <AdminDailyReports items={dailyReportsUi} />
+
+        {/* Face auth toggle (ADMIN only) */}
+        {role === "ADMIN" && tenant && (
+          <FaceAuthToggle
+            enabled={tenant.faceAuthEnabled}
+            kioskUrl={`/kiosk/${tenant.slug}`}
+          />
+        )}
       </main>
     </>
   );

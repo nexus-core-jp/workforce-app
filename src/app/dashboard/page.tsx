@@ -25,16 +25,50 @@ export default async function DashboardPage() {
 
   if (role === "SUPER_ADMIN") redirect("/super-admin");
 
-  // Fetch tenant for trial info and face auth setting
-  const tenant = await prisma.tenant.findUnique({
-    where: { id: tenantId },
-    select: { plan: true, trialEndsAt: true, faceAuthEnabled: true },
-  });
-
   const today = startOfJstDay(new Date());
-  const entry = await prisma.timeEntry.findUnique({
-    where: { tenantId_userId_date: { tenantId, userId, date: today } },
-  });
+  const from = addJstDays(today, -6);
+
+  // Monthly overtime date range
+  const currentMonth = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "2-digit",
+  }).format(today);
+  const [cYear, cMon] = currentMonth.split("-").map(Number);
+  const monthStart = startOfJstDay(new Date(Date.UTC(cYear, cMon - 1, 1)));
+
+  // Parallelize independent DB queries for faster page load
+  const [tenant, entry, history, myPendingCount, dailyReport, leaveLedger, myPendingLeaves, monthEntries, faceDescriptorCount] = await Promise.all([
+    prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { plan: true, trialEndsAt: true, faceAuthEnabled: true },
+    }),
+    prisma.timeEntry.findUnique({
+      where: { tenantId_userId_date: { tenantId, userId, date: today } },
+    }),
+    prisma.timeEntry.findMany({
+      where: { tenantId, userId, date: { gte: from, lte: today } },
+      orderBy: { date: "desc" },
+    }),
+    prisma.attendanceCorrection.count({
+      where: { tenantId, userId, status: "PENDING" },
+    }),
+    prisma.dailyReport.findUnique({
+      where: { tenantId_userId_date: { tenantId, userId, date: today } },
+    }),
+    prisma.leaveLedgerEntry.findMany({
+      where: { tenantId, userId },
+    }),
+    prisma.leaveRequest.count({
+      where: { tenantId, userId, status: "PENDING" },
+    }),
+    prisma.timeEntry.findMany({
+      where: { tenantId, userId, date: { gte: monthStart, lte: today } },
+    }),
+    prisma.faceDescriptor.count({
+      where: { tenantId, userId },
+    }),
+  ]);
 
   const clockInAt = entry?.clockInAt ?? null;
   const breakStartAt = entry?.breakStartAt ?? null;
@@ -45,20 +79,6 @@ export default async function DashboardPage() {
   const canBreakStart = !!clockInAt && !clockOutAt && !breakStartAt;
   const canBreakEnd = !!breakStartAt && !breakEndAt;
   const canClockOut = !!clockInAt && !clockOutAt && (!breakStartAt || !!breakEndAt);
-
-  // Last 7 days entries
-  const from = addJstDays(today, -6);
-  const history = await prisma.timeEntry.findMany({
-    where: {
-      tenantId,
-      userId,
-      date: {
-        gte: from,
-        lte: today,
-      },
-    },
-    orderBy: { date: "desc" },
-  });
 
   const historyMap = new Map(history.map((h) => [h.date.toISOString(), h]));
   const historyItems = Array.from({ length: 7 }, (_, i) => {
@@ -90,41 +110,18 @@ export default async function DashboardPage() {
     };
   });
 
-  // My pending correction count
-  const myPendingCount = await prisma.attendanceCorrection.count({
-    where: { tenantId, userId, status: "PENDING" },
-  });
-
   // Leave balance
-  const leaveLedger = await prisma.leaveLedgerEntry.findMany({
-    where: { tenantId, userId },
-  });
   let leaveBalance = 0;
-  for (const entry of leaveLedger) {
-    const days = Number(entry.days);
-    if (entry.kind === "USE") {
+  for (const ledgerEntry of leaveLedger) {
+    const days = Number(ledgerEntry.days);
+    if (ledgerEntry.kind === "USE") {
       leaveBalance -= days;
     } else {
       leaveBalance += days;
     }
   }
 
-  // My pending leave requests
-  const myPendingLeaves = await prisma.leaveRequest.count({
-    where: { tenantId, userId, status: "PENDING" },
-  });
-
   // Monthly overtime calculation
-  const currentMonth = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Tokyo",
-    year: "numeric",
-    month: "2-digit",
-  }).format(today);
-  const [cYear, cMon] = currentMonth.split("-").map(Number);
-  const monthStart = startOfJstDay(new Date(Date.UTC(cYear, cMon - 1, 1)));
-  const monthEntries = await prisma.timeEntry.findMany({
-    where: { tenantId, userId, date: { gte: monthStart, lte: today } },
-  });
   let monthlyOvertimeMinutes = 0;
   for (const me of monthEntries) {
     monthlyOvertimeMinutes += calcDailyOvertime(me.workMinutes, STANDARD_DAILY_MINUTES);
@@ -133,22 +130,16 @@ export default async function DashboardPage() {
 
   // Face auth: check if user has registered face descriptors
   const faceAuthEnabled = tenant?.faceAuthEnabled ?? false;
-  const faceRegistered = faceAuthEnabled
-    ? (await prisma.faceDescriptor.count({ where: { tenantId, userId } })) > 0
-    : false;
+  const faceRegistered = faceAuthEnabled ? faceDescriptorCount > 0 : false;
 
   const isAdminOrApprover = role === "ADMIN" || role === "APPROVER";
 
-  // Today's daily report
   const todayYmd = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Tokyo",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
   }).format(today);
-  const dailyReport = await prisma.dailyReport.findUnique({
-    where: { tenantId_userId_date: { tenantId, userId, date: today } },
-  });
   const dailyReportStatus: "none" | "draft" | "submitted" =
     dailyReport?.status === "SUBMITTED" ? "submitted" : dailyReport ? "draft" : "none";
 
@@ -285,6 +276,14 @@ export default async function DashboardPage() {
             あなたの未処理申請: <span className="badge badge-pending">{myPendingCount} 件</span>
           </p>
         </section>
+
+        {/* Face registration link */}
+        {tenant?.faceAuthEnabled && (
+          <section>
+            <h2 style={{ marginBottom: 8 }}>顔認証</h2>
+            <Link href="/dashboard/face-register">顔データを登録・管理 →</Link>
+          </section>
+        )}
       </main>
     </>
   );
