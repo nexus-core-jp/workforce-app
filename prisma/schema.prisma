@@ -51,6 +51,7 @@ model User {
   @@unique([tenantId, email])
   @@unique([tenantId, lineId])
   @@index([tenantId, role])
+  @@index([tenantId, departmentId])
 }
 
 model Account {
@@ -138,6 +139,7 @@ model Department {
 
   @@unique([tenantId, name])
   @@index([tenantId])
+  @@index([tenantId, approverUserId])
 }
 
 model ShiftPattern {
@@ -282,6 +284,7 @@ model LeaveRequest {
 
   @@index([tenantId, status])
   @@index([tenantId, userId])
+  @@index([tenantId, userId, status])
 }
 
 model LeaveLedgerEntry {

@@ -7,10 +7,9 @@ import { prisma } from "@/lib/db";
 import { toSessionUser } from "@/lib/session";
 
 import { Logo } from "../../Logo";
-import { AddMemberForm } from "./AddMemberForm";
-import { MemberList } from "./MemberList";
+import { DepartmentManager } from "./DepartmentManager";
 
-export default async function MembersPage() {
+export default async function DepartmentsPage() {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
@@ -19,40 +18,38 @@ export default async function MembersPage() {
 
   if (user.role !== "ADMIN") redirect("/dashboard");
 
-  const [members, departments] = await Promise.all([
-    prisma.user.findMany({
-      where: { tenantId: user.tenantId },
-      orderBy: { createdAt: "asc" },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        active: true,
-        createdAt: true,
-        departmentId: true,
-        department: { select: { name: true } },
-      },
-    }),
+  const [departments, approverCandidates] = await Promise.all([
     prisma.department.findMany({
       where: { tenantId: user.tenantId },
       orderBy: { name: "asc" },
-      select: { id: true, name: true },
+      include: {
+        approver: { select: { id: true, name: true, email: true } },
+        _count: { select: { users: true } },
+      },
+    }),
+    prisma.user.findMany({
+      where: {
+        tenantId: user.tenantId,
+        active: true,
+        role: { in: ["ADMIN", "APPROVER"] },
+      },
+      select: { id: true, name: true, email: true },
+      orderBy: { name: "asc" },
     }),
   ]);
 
-  const membersUi = members.map((m) => ({
-    id: m.id,
-    name: m.name,
-    email: m.email,
-    role: m.role as "EMPLOYEE" | "APPROVER" | "ADMIN",
-    active: m.active,
-    createdAt: m.createdAt.toISOString(),
-    departmentId: m.departmentId,
-    departmentName: m.department?.name ?? null,
+  const departmentsUi = departments.map((d) => ({
+    id: d.id,
+    name: d.name,
+    approverUserId: d.approverUserId,
+    approverLabel: d.approver ? (d.approver.name ?? d.approver.email) : null,
+    memberCount: d._count.users,
   }));
 
-  const departmentsUi = departments.map((d) => ({ id: d.id, name: d.name }));
+  const approversUi = approverCandidates.map((u) => ({
+    id: u.id,
+    label: u.name ?? u.email,
+  }));
 
   return (
     <>
@@ -80,8 +77,7 @@ export default async function MembersPage() {
           <Link href="/dashboard">マイページ</Link>
         </nav>
 
-        <AddMemberForm departments={departmentsUi} />
-        <MemberList members={membersUi} currentUserId={user.id} departments={departmentsUi} />
+        <DepartmentManager departments={departmentsUi} approvers={approversUi} />
       </main>
     </>
   );

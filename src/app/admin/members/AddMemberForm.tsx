@@ -3,12 +3,18 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-export function AddMemberForm() {
+interface Department {
+  id: string;
+  name: string;
+}
+
+export function AddMemberForm({ departments }: { departments: Department[] }) {
   const router = useRouter();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"EMPLOYEE" | "APPROVER" | "ADMIN">("EMPLOYEE");
+  const [departmentId, setDepartmentId] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -22,7 +28,13 @@ export function AddMemberForm() {
       const res = await fetch("/api/admin/members", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password, role }),
+        body: JSON.stringify({
+          name,
+          email,
+          password,
+          role,
+          departmentId: departmentId || null,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -33,6 +45,7 @@ export function AddMemberForm() {
         setEmail("");
         setPassword("");
         setRole("EMPLOYEE");
+        setDepartmentId("");
         router.refresh();
       }
     } catch {
@@ -87,6 +100,21 @@ export function AddMemberForm() {
             <option value="APPROVER">承認者</option>
             <option value="ADMIN">管理者</option>
           </select>
+        </label>
+
+        <label style={{ display: "grid", gap: 4 }}>
+          <span>部署</span>
+          <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)}>
+            <option value="">未所属</option>
+            {departments.map((d) => (
+              <option key={d.id} value={d.id}>{d.name}</option>
+            ))}
+          </select>
+          {departments.length === 0 && (
+            <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
+              部署は管理画面の部署管理から追加できます
+            </span>
+          )}
         </label>
 
         <button type="submit" data-variant="primary" disabled={loading}>

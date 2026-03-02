@@ -13,6 +13,7 @@ const addSchema = z.object({
   email: z.string().email("メールアドレスの形式が正しくありません"),
   password: passwordSchema,
   role: z.enum(["EMPLOYEE", "APPROVER", "ADMIN"]),
+  departmentId: z.string().nullable().optional(),
 });
 
 const patchSchema = z.object({
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 
-  const { name, email, password, role } = parsed.data;
+  const { name, email, password, role, departmentId } = parsed.data;
 
   // Check email uniqueness within tenant
   const existing = await prisma.user.findUnique({
@@ -64,6 +65,7 @@ export async function POST(request: Request) {
       name,
       role,
       passwordHash,
+      departmentId: departmentId ?? null,
     },
   });
 
@@ -74,7 +76,7 @@ export async function POST(request: Request) {
       action: "MEMBER_ADDED",
       entityType: "User",
       entityId: newUser.id,
-      afterJson: { email, name, role },
+      afterJson: { email, name, role, departmentId: departmentId ?? null },
     },
   });
 

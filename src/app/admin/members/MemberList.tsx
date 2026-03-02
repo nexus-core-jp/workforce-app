@@ -5,6 +5,11 @@ import { useRouter } from "next/navigation";
 
 type Role = "EMPLOYEE" | "APPROVER" | "ADMIN";
 
+interface Department {
+  id: string;
+  name: string;
+}
+
 interface Member {
   id: string;
   name: string | null;
@@ -12,6 +17,8 @@ interface Member {
   role: Role;
   active: boolean;
   createdAt: string;
+  departmentId: string | null;
+  departmentName: string | null;
 }
 
 const roleLabels: Record<Role, string> = {
@@ -23,9 +30,11 @@ const roleLabels: Record<Role, string> = {
 export function MemberList({
   members,
   currentUserId,
+  departments,
 }: {
   members: Member[];
   currentUserId: string;
+  departments: Department[];
 }) {
   const router = useRouter();
   const [loading, setLoading] = useState<string | null>(null);
@@ -53,6 +62,28 @@ export function MemberList({
     }
   }
 
+  async function changeDepartment(userId: string, departmentId: string | null) {
+    setLoading(userId);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/departments", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, departmentId }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error ?? "部署変更に失敗しました");
+      } else {
+        router.refresh();
+      }
+    } catch {
+      setError("部署変更に失敗しました");
+    } finally {
+      setLoading(null);
+    }
+  }
+
   return (
     <section>
       <h2 style={{ marginBottom: 12 }}>メンバー一覧（{members.length} 名）</h2>
@@ -64,6 +95,7 @@ export function MemberList({
             <tr>
               <th>名前</th>
               <th>メール</th>
+              <th>部署</th>
               <th>役割</th>
               <th>状態</th>
               <th>アクション</th>
@@ -78,6 +110,24 @@ export function MemberList({
                 <tr key={m.id}>
                   <td>{m.name ?? "—"}</td>
                   <td style={{ fontFamily: "monospace" }}>{m.email}</td>
+                  <td>
+                    <select
+                      value={m.departmentId ?? ""}
+                      disabled={isLoading}
+                      onChange={(e) =>
+                        changeDepartment(m.id, e.target.value || null)
+                      }
+                      className="select-compact"
+                      aria-label={`${m.name ?? m.email} の部署`}
+                    >
+                      <option value="">未所属</option>
+                      {departments.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.name}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
                   <td>
                     {isSelf ? (
                       <span className={`badge ${m.role === "ADMIN" ? "badge-closed" : m.role === "APPROVER" ? "badge-pending" : "badge-open"}`}>
