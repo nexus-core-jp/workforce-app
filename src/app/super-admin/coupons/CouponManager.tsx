@@ -44,7 +44,7 @@ export function CouponManager() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(load, []);
+  useEffect(() => { load(); }, []);
 
   const handleDelete = async (id: string) => {
     if (!confirm("このクーポンを無効にしますか？")) return;

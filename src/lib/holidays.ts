@@ -98,7 +98,7 @@ function parseDate(s: string): Date {
 function nthWeekday(year: number, month: number, weekday: number, nth: number): string {
   const first = new Date(Date.UTC(year, month - 1, 1));
   const firstDow = first.getUTCDay();
-  let day = 1 + ((weekday - firstDow + 7) % 7) + (nth - 1) * 7;
+  const day = 1 + ((weekday - firstDow + 7) % 7) + (nth - 1) * 7;
   return fmt(year, month, day);
 }
 

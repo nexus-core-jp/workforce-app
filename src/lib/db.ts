@@ -12,7 +12,8 @@ function createPrismaClient() {
   // In development, use standard TCP connection
   if (process.env.NODE_ENV === "production") {
     const pool = new Pool({ connectionString });
-    const adapter = new PrismaNeon(pool);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const adapter = new PrismaNeon(pool as any);
     return new PrismaClient({
       adapter,
       log: ["error"],

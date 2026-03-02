@@ -63,7 +63,7 @@ export async function POST(req: Request) {
 
       const faceResult = findBestMatch(
         faceDescriptor,
-        stored.map((s) => s.descriptor as number[]),
+        stored.map((s) => JSON.parse(s.descriptor as string) as number[]),
       );
 
       if (!faceResult.matched) {

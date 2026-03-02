@@ -10,7 +10,7 @@ interface Props {
   isAdmin: boolean;
   month: string;
   isClosed: boolean;
-  onToast: (text: string, type: "success" | "error") => void;
+  onToast?: (text: string, type: "success" | "error") => void;
 }
 
 export function ClosePanel(props: Props) {
@@ -34,12 +34,12 @@ export function ClosePanel(props: Props) {
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
-        props.onToast(`${props.month} の締め処理が完了しました`, "success");
+        props.onToast?.(`${props.month} の締め処理が完了しました`, "success");
         router.refresh();
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "エラーが発生しました";
         setError(msg);
-        props.onToast(msg, "error");
+        props.onToast?.(msg, "error");
       }
     });
   };
@@ -56,12 +56,12 @@ export function ClosePanel(props: Props) {
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data?.error ?? `HTTP ${res.status}`);
-        props.onToast(`${props.month} の締めを解除しました`, "success");
+        props.onToast?.(`${props.month} の締めを解除しました`, "success");
         router.refresh();
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : "エラーが発生しました";
         setError(msg);
-        props.onToast(msg, "error");
+        props.onToast?.(msg, "error");
       }
     });
   };

@@ -70,12 +70,6 @@ export interface Overtime36Alert {
   message: string;
 }
 
-/** Get JST hour (0-23) from a UTC Date */
-function getJstHour(date: Date): number {
-  const jstMs = date.getTime() + JST_OFFSET_MS;
-  return new Date(jstMs).getUTCHours();
-}
-
 /** Get JST day-of-week (0=Sun) from a date-only field */
 function getJstDayOfWeek(dateOnly: Date): number {
   const jstMs = dateOnly.getTime() + JST_OFFSET_MS;
