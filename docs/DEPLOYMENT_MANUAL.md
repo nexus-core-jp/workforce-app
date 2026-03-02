@@ -272,3 +272,91 @@ Vercelのランタイムログは、以下のURLで確認できます。
 | GitHubリポジトリ | [https://github.com/nexus-core-jp/workforce-app](https://github.com/nexus-core-jp/workforce-app) |
 | Prisma公式ドキュメント | [https://www.prisma.io/docs](https://www.prisma.io/docs) |
 | NextAuth v5ドキュメント | [https://authjs.dev/](https://authjs.dev/) |
+
+
+---
+
+## 8. Stripe決済連携
+
+Workforce NexusはStripeと連携して、サブスクリプション決済を管理します。以下に設定手順を記載します。
+
+### 8.1. Stripe商品・価格の作成
+
+1. [Stripeダッシュボード](https://dashboard.stripe.com/)にログインします。
+2. 「商品カタログ」に移動し、「**+ 商品を追加**」をクリックします。
+3. **商品情報**を入力します。
+   - **名前**: Workforce Nexus Pro Plan
+   - **説明**: 勤怠管理SaaSのプロフェッショナルプラン
+4. **料金体系**を設定します。
+   - **モデル**: 「標準の料金体系」を選択
+   - **価格**: 任意の月額料金を設定（例: 5,000円）
+   - **継続**: 「継続」を選択
+   - **請求期間**: 「月ごと」を選択
+5. 商品を保存すると、**価格ID**（`price_...`）が発行されます。このIDをVercelの環境変数 `STRIPE_PRICE_ID` に設定します。
+
+### 8.2. APIキーとWebhookシークレットの取得
+
+1. 「開発者」 > 「**APIキー**」に移動します。
+2. 「**シークレットキー**」をコピーし、Vercelの環境変数 `STRIPE_SECRET_KEY` に設定します。
+3. 「開発者」 > 「**Webhook**」に移動し、「**+ エンドポイントを追加**」をクリックします。
+4. **エンドポイントURL**に `https://workforce-app-two.vercel.app/api/stripe/webhook` を設定します。
+5. 「**リッスンするイベント**」で以下のイベントを選択します。
+   - `checkout.session.completed`
+   - `invoice.payment_succeeded`
+   - `invoice.payment_failed`
+   - `customer.subscription.updated`
+   - `customer.subscription.deleted`
+6. エンドポイントを作成すると、「**署名シークレット**」が表示されます。これをVercelの環境変数 `STRIPE_WEBHOOK_SECRET` に設定します。
+
+### 8.3. Vercel環境変数の設定
+
+以下の3つの環境変数をVercelに追加し、Redeployを実行します。
+
+| 変数名 | 説明 | 設定例 |
+|---|---|---|
+| `STRIPE_SECRET_KEY` | Stripe APIシークレットキー | `sk_test_...` |
+| `STRIPE_WEBHOOK_SECRET` | Webhook署名シークレット | `whsec_...` |
+| `STRIPE_PRICE_ID` | サブスクリプションの価格ID | `price_...` |
+
+### 8.4. 動作確認
+
+1. 管理者アカウントでログインし、「管理画面」 > 「プラン・請求」にアクセスします。
+2. 「有料プランにアップグレード」ボタンをクリックし、Stripe Checkout画面に遷移することを確認します。
+3. （テストカードを使用して）決済を完了し、プランが「アクティブ」に更新されることを確認します。
+4. 「支払い管理（Stripe）」ボタンをクリックし、Stripe Billing Portalに遷移することを確認します。
+
+
+---
+
+## 9. Resendメール通知
+
+パスワードリセットや新規登録通知のために、Resendと連携してメールを送信します。
+
+### 9.1. ドメイン認証
+
+Resendからメールを送信するには、送信元として使用するドメインを認証する必要があります。Workforce Nexusでは `noreply@workforce.app` を使用するため、`workforce.app` ドメインの認証が必要です。
+
+1. [Resendダッシュボード](https://resend.com/domains)にログインします。
+2. 「**Add Domain**」をクリックし、`workforce.app` を入力します。
+3. 表示される2つのDNSレコード（`SPF` と `DKIM`）を、`workforce.app` のDNSプロバイダー（例: Google Domains, Cloudflare）に追加します。
+4. DNSが伝播した後、Resendダッシュボードで「Verify」をクリックして認証を完了します。
+
+### 9.2. APIキーの取得
+
+1. 「API Keys」に移動し、「**+ Create API Key**」をクリックします。
+2. キーに名前を付け（例: `Workforce Nexus Production`）、権限は「**Full access**」を選択します。
+3. 作成されたAPIキーをコピーし、Vercelの環境変数 `RESEND_API_KEY` に設定します。
+
+### 9.3. Vercel環境変数の設定
+
+以下の2つの環境変数をVercelに追加し、Redeployを実行します。
+
+| 変数名 | 説明 | 設定例 |
+|---|---|---|
+| `RESEND_API_KEY` | ResendのAPIキー | `re_...` |
+| `NOTIFICATION_EMAIL` | 新規登録通知を受け取るメールアドレス | `your-admin-email@example.com` |
+
+### 9.4. 動作確認
+
+1. ログイン画面で「パスワードをお忘れですか？」からパスワードリセットを試行し、メールが届くことを確認します。
+2. 新しい会社を登録し、`NOTIFICATION_EMAIL` に設定したアドレスに通知メールが届くことを確認します。
