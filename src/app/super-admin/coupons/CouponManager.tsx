@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useReducer, useState } from "react";
 
 interface PromoCode {
   id: string;
@@ -26,25 +26,57 @@ interface CouponItem {
   promoCodes: PromoCode[];
 }
 
+type FetchState = {
+  coupons: CouponItem[];
+  loading: boolean;
+  error: string | null;
+};
+
+type FetchAction =
+  | { type: "FETCH_START" }
+  | { type: "FETCH_SUCCESS"; coupons: CouponItem[] }
+  | { type: "FETCH_ERROR"; error: string };
+
+function fetchReducer(state: FetchState, action: FetchAction): FetchState {
+  switch (action.type) {
+    case "FETCH_START":
+      return { ...state, loading: true, error: null };
+    case "FETCH_SUCCESS":
+      return { coupons: action.coupons, loading: false, error: null };
+    case "FETCH_ERROR":
+      return { ...state, loading: false, error: action.error };
+  }
+}
+
+async function fetchCoupons(dispatch: React.Dispatch<FetchAction>, signal: AbortSignal) {
+  dispatch({ type: "FETCH_START" });
+  try {
+    const res = await fetch("/api/super-admin/coupons", { signal });
+    const d = await res.json();
+    if (signal.aborted) return;
+    if (d.ok) dispatch({ type: "FETCH_SUCCESS", coupons: d.coupons });
+    else dispatch({ type: "FETCH_ERROR", error: d.error });
+  } catch {
+    if (!signal.aborted) dispatch({ type: "FETCH_ERROR", error: "取得に失敗しました" });
+  }
+}
+
 export function CouponManager() {
-  const [coupons, setCoupons] = useState<CouponItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [state, dispatch] = useReducer(fetchReducer, {
+    coupons: [],
+    loading: true,
+    error: null,
+  });
   const [showForm, setShowForm] = useState(false);
+  const [reloadKey, reload] = useReducer((x: number) => x + 1, 0);
 
-  const load = () => {
-    setLoading(true);
-    fetch("/api/super-admin/coupons")
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.ok) setCoupons(d.coupons);
-        else setError(d.error);
-      })
-      .catch(() => setError("取得に失敗しました"))
-      .finally(() => setLoading(false));
-  };
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchCoupons(dispatch, controller.signal);
+    return () => controller.abort();
+  }, [reloadKey]);
 
-  useEffect(() => { load(); }, []);
+  const { coupons, loading, error } = state;
 
   const handleDelete = async (id: string) => {
     if (!confirm("このクーポンを無効にしますか？")) return;
@@ -53,7 +85,7 @@ export function CouponManager() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id }),
     });
-    if (res.ok) load();
+    if (res.ok) reload();
   };
 
   if (loading) return <p>読み込み中...</p>;
@@ -70,7 +102,7 @@ export function CouponManager() {
         {showForm ? "フォームを閉じる" : "新しいクーポンを作成"}
       </button>
 
-      {showForm && <CreateCouponForm onCreated={() => { setShowForm(false); load(); }} />}
+      {showForm && <CreateCouponForm onCreated={() => { setShowForm(false); reload(); }} />}
 
       {coupons.length === 0 ? (
         <p style={{ color: "var(--color-text-secondary)", fontSize: 13 }}>
