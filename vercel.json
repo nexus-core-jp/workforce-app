@@ -1,0 +1,13 @@
+{
+  "functions": {
+    "src/app/api/admin/export/route.ts": {
+      "maxDuration": 120
+    },
+    "src/app/api/admin/overtime/route.ts": {
+      "maxDuration": 60
+    },
+    "src/app/api/stripe/webhook/route.ts": {
+      "maxDuration": 30
+    }
+  }
+}

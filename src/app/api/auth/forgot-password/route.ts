@@ -5,6 +5,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { sendPasswordResetEmail } from "@/lib/email";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { rateLimit } from "@/lib/rate-limit";
 
 const schema = z.object({
   tenant: z.string().min(1),
@@ -22,10 +23,17 @@ export async function POST(request: Request) {
     );
   }
 
-  const body = await request.json();
-  const parsed = schema.safeParse(body);
+  // Pre-parse to get email for email-based rate limiting
+  const bodyRaw = await request.json();
+  const parsed = schema.safeParse(bodyRaw);
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+  }
+
+  const { limited: emailLimited } = await rateLimit(`forgot:email:${parsed.data.email}`, 5, 60 * 60 * 1000);
+  if (emailLimited) {
+    // Return 200 to prevent enumeration
+    return NextResponse.json({ ok: true });
   }
 
   const { tenant: slug, email } = parsed.data;

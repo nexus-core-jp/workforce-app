@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-
 import { prisma } from "@/lib/db";
+
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
@@ -16,6 +17,7 @@ export async function GET() {
         status: "error",
         timestamp: new Date().toISOString(),
         database: "disconnected",
+        message: "Database connection failed",
       },
       { status: 503 },
     );

@@ -136,7 +136,14 @@ export function MemberList({
                       <select
                         value={m.role}
                         disabled={isLoading}
-                        onChange={(e) => action(m.id, "changeRole", e.target.value as Role)}
+                        onChange={(e) => {
+                          const newRole = e.target.value as Role;
+                          if (!window.confirm(`${m.name ?? m.email} の役割を「${roleLabels[newRole]}」に変更しますか？`)) {
+                            e.target.value = m.role;
+                            return;
+                          }
+                          action(m.id, "changeRole", newRole);
+                        }}
                         className="select-compact"
                         aria-label={`${m.name ?? m.email} の役割`}
                       >
@@ -159,7 +166,7 @@ export function MemberList({
                         className="btn-compact"
                         disabled={isLoading}
                         onClick={() => {
-                          if (!confirm(`${m.name ?? m.email} を退社処理しますか？\nこのメンバーはログインできなくなります。`)) return;
+                          if (!window.confirm(`${m.name ?? m.email} を退社処理しますか？\nこのメンバーはログインできなくなります。`)) return;
                           action(m.id, "deactivate");
                         }}
                       >

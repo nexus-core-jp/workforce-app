@@ -83,6 +83,17 @@ export async function POST(req: Request) {
 
   if (endDate < startDate) return jsonError("終了日は開始日以降にしてください");
 
+  // Check for overlapping assignments
+  const overlap = await prisma.shiftAssignment.findFirst({
+    where: {
+      tenantId,
+      userId: input.data.userId,
+      startDate: { lte: endDate },
+      endDate: { gte: startDate },
+    },
+  });
+  if (overlap) return jsonError("指定期間に既存のシフト割当が重複しています", 409);
+
   const created = await prisma.shiftAssignment.create({
     data: {
       tenantId,
@@ -90,6 +101,17 @@ export async function POST(req: Request) {
       shiftPatternId: input.data.shiftPatternId,
       startDate,
       endDate,
+    },
+  });
+
+  await prisma.auditLog.create({
+    data: {
+      tenantId,
+      actorUserId: user.id,
+      action: "SHIFT_ASSIGNMENT_CREATED",
+      entityType: "ShiftAssignment",
+      entityId: created.id,
+      afterJson: { userId: input.data.userId, shiftPatternId: input.data.shiftPatternId, startDate: input.data.startDate, endDate: input.data.endDate },
     },
   });
 
@@ -117,6 +139,17 @@ export async function DELETE(req: Request) {
   if (!assignment || assignment.tenantId !== tenantId) return jsonError("Not found", 404);
 
   await prisma.shiftAssignment.delete({ where: { id } });
+
+  await prisma.auditLog.create({
+    data: {
+      tenantId,
+      actorUserId: user.id,
+      action: "SHIFT_ASSIGNMENT_DELETED",
+      entityType: "ShiftAssignment",
+      entityId: id,
+      beforeJson: { userId: assignment.userId, startDate: assignment.startDate, endDate: assignment.endDate },
+    },
+  });
 
   return NextResponse.json({ ok: true });
 }

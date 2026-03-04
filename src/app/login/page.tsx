@@ -25,6 +25,8 @@ function LoginForm() {
   const [tenant, setTenant] = useState("demo");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [totpCode, setTotpCode] = useState("");
+  const [needsTotp, setNeedsTotp] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -84,11 +86,17 @@ function LoginForm() {
                 tenant,
                 email,
                 password,
+                totpCode: needsTotp ? totpCode : undefined,
                 redirect: false,
               });
               if (res?.error) {
                 if (res.error.includes("RATE_LIMITED")) {
                   setError("ログイン試行回数が上限を超えました。15分後にお試しください。");
+                } else if (res.error.includes("TOTP_REQUIRED")) {
+                  setNeedsTotp(true);
+                  setError(null);
+                } else if (res.error.includes("TOTP_INVALID")) {
+                  setError("認証コードが正しくありません");
                 } else {
                   setError("会社ID、メールアドレス、またはパスワードが正しくありません");
                 }
@@ -132,8 +140,26 @@ function LoginForm() {
               />
             </label>
 
+            {needsTotp && (
+              <label style={{ display: "grid", gap: 6 }}>
+                <span>認証コード（2FA）</span>
+                <input
+                  value={totpCode}
+                  onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]{6}"
+                  maxLength={6}
+                  required
+                  autoComplete="one-time-code"
+                  placeholder="6桁の認証コード"
+                  autoFocus
+                />
+              </label>
+            )}
+
             <button type="submit" data-variant="primary" disabled={loading} style={{ marginTop: 8 }}>
-              {loading ? "ログイン中..." : "ログイン"}
+              {loading ? "ログイン中..." : needsTotp ? "認証コードを送信" : "ログイン"}
             </button>
           </fieldset>
 

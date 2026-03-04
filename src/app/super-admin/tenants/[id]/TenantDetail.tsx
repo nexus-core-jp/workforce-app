@@ -57,6 +57,7 @@ export function TenantDetail({ tenant, users }: { tenant: TenantInfo; users: Use
 
   async function changePlan(newPlan: TenantPlan) {
     if (newPlan === tenant.plan) return;
+    if (!window.confirm(`${tenant.name} のプランを「${newPlan}」に変更しますか？`)) return;
     setChangingPlan(true);
     setError(null);
     try {
@@ -78,7 +79,7 @@ export function TenantDetail({ tenant, users }: { tenant: TenantInfo; users: Use
     }
   }
 
-  function handleTogglePii() {
+  async function handleTogglePii() {
     if (!showPii) {
       setPiiConfirm(true);
       return;
@@ -86,7 +87,17 @@ export function TenantDetail({ tenant, users }: { tenant: TenantInfo; users: Use
     setShowPii(false);
   }
 
-  function confirmPii() {
+  async function confirmPii() {
+    // Log PII viewing to audit log
+    try {
+      await fetch(`/api/super-admin/tenants/${tenant.id}/plan`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "VIEW_PII" }),
+      });
+    } catch {
+      // Non-blocking: proceed even if logging fails
+    }
     setPiiConfirm(false);
     setShowPii(true);
   }

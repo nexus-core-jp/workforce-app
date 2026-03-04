@@ -2,10 +2,28 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 
+const protectedPrefixes = [
+  "/admin",
+  "/dashboard",
+  "/super-admin",
+  "/leave-requests",
+  "/daily-reports",
+  "/corrections",
+  "/suspended",
+];
+
 export async function proxy(req: NextRequest) {
   const token = await getToken({ req, secret: process.env.AUTH_SECRET });
+  const { pathname } = req.nextUrl;
 
-  // No session → let next-auth handle redirect
+  // Unauthenticated users accessing protected routes → redirect to login
+  const isProtected = protectedPrefixes.some((p) => pathname.startsWith(p));
+  if (isProtected && !token) {
+    const loginUrl = new URL("/login", req.url);
+    loginUrl.searchParams.set("callbackUrl", pathname);
+    return NextResponse.redirect(loginUrl);
+  }
+
   if (!token) return NextResponse.next();
 
   const role = token.role as string | undefined;
@@ -15,7 +33,7 @@ export async function proxy(req: NextRequest) {
   if (role === "SUPER_ADMIN") return NextResponse.next();
 
   // SUSPENDED → redirect to /suspended
-  if (plan === "SUSPENDED" && req.nextUrl.pathname !== "/suspended") {
+  if (plan === "SUSPENDED" && pathname !== "/suspended") {
     return NextResponse.redirect(new URL("/suspended", req.url));
   }
 
@@ -34,6 +52,6 @@ export async function proxy(req: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon\\.ico|icon-.*|manifest\\.json|api/auth|api/line|api/stripe/webhook|login|register|forgot-password|reset-password|suspended).*)",
+    "/((?!_next/static|_next/image|favicon\\.ico|icon-.*|manifest\\.json|api/auth|api/line|api/stripe/webhook|api/health|login|register|forgot-password|reset-password|verify-email|suspended).*)",
   ],
 };

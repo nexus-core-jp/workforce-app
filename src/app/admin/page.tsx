@@ -17,6 +17,7 @@ import { AttendanceStatus } from "./AttendanceStatus";
 import { ExportPanel } from "./ExportPanel";
 import { FaceAuthToggle } from "./FaceAuthToggle";
 import { LeaveBalanceReport } from "./LeaveBalanceReport";
+import { MobileNav } from "./MobileNav";
 import { OvertimePanel } from "./OvertimePanel";
 
 export default async function AdminPage() {
@@ -289,17 +290,20 @@ export default async function AdminPage() {
 
       <main className="page-container">
         {/* Navigation */}
-        <nav style={{ display: "flex", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
-          <Link href="/dashboard">← マイページ</Link>
-          {role === "ADMIN" && <Link href="/admin/members">メンバー管理</Link>}
-          {role === "ADMIN" && <Link href="/admin/departments">部署管理</Link>}
-          {role === "ADMIN" && <Link href="/admin/shifts">シフト管理</Link>}
-          {role === "ADMIN" && <Link href="/admin/payroll">給与設定</Link>}
-          {role === "ADMIN" && <Link href="/admin/payroll/calc">給与計算</Link>}
-          {role === "ADMIN" && <Link href="/admin/holidays">休日カレンダー</Link>}
-          {role === "ADMIN" && <Link href="/admin/billing">プラン・請求</Link>}
-          {role === "ADMIN" && <Link href="/admin/audit-logs">監査ログ</Link>}
-        </nav>
+        <MobileNav
+          role={role}
+          links={[
+            { href: "/dashboard", label: "← マイページ" },
+            { href: "/admin/members", label: "メンバー管理", adminOnly: true },
+            { href: "/admin/departments", label: "部署管理", adminOnly: true },
+            { href: "/admin/shifts", label: "シフト管理", adminOnly: true },
+            { href: "/admin/payroll", label: "給与設定", adminOnly: true },
+            { href: "/admin/payroll/calc", label: "給与計算", adminOnly: true },
+            { href: "/admin/holidays", label: "休日カレンダー", adminOnly: true },
+            { href: "/admin/billing", label: "プラン・請求", adminOnly: true },
+            { href: "/admin/audit-logs", label: "監査ログ", adminOnly: true },
+          ]}
+        />
 
         {/* Overview cards */}
         <section>

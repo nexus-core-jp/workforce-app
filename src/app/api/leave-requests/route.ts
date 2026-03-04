@@ -38,20 +38,18 @@ export async function GET() {
     include: { user: { select: { name: true, email: true } } },
   });
 
-  // Leave balance: sum of GRANT/ADJUST - USE
-  const ledger = await prisma.leaveLedgerEntry.findMany({
-    where: { tenantId, userId },
-  });
-
-  let balance = 0;
-  for (const entry of ledger) {
-    const days = Number(entry.days);
-    if (entry.kind === "USE") {
-      balance -= days;
-    } else {
-      balance += days;
-    }
-  }
+  // Leave balance: sum of GRANT/ADJUST - USE (aggregated in DB)
+  const [grantResult, useResult] = await Promise.all([
+    prisma.leaveLedgerEntry.aggregate({
+      where: { tenantId, userId, kind: { in: ["GRANT", "ADJUST"] } },
+      _sum: { days: true },
+    }),
+    prisma.leaveLedgerEntry.aggregate({
+      where: { tenantId, userId, kind: "USE" },
+      _sum: { days: true },
+    }),
+  ]);
+  const balance = Number(grantResult._sum.days ?? 0) - Number(useResult._sum.days ?? 0);
 
   return NextResponse.json({ ok: true, requests, balance });
 }

@@ -5,6 +5,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { toSessionUser } from "@/lib/session";
 import { guardSuspended } from "@/lib/tenant-guard";
+import { logger } from "@/lib/logger";
 
 function jsonError(message: string, status = 400) {
   return NextResponse.json({ ok: false, error: message }, { status });
@@ -71,7 +72,7 @@ export async function POST(req: Request) {
   });
 
   // Audit log
-  prisma.auditLog.create({
+  await prisma.auditLog.create({
     data: {
       tenantId,
       actorUserId: user.id,
@@ -80,7 +81,7 @@ export async function POST(req: Request) {
       entityId: created.id,
       afterJson: { name: input.data.name, plannedStart: input.data.plannedStart, plannedEnd: input.data.plannedEnd },
     },
-  }).catch((err) => console.error("[audit]", err));
+  });
 
   return NextResponse.json({ ok: true, pattern: created });
 }
@@ -108,7 +109,7 @@ export async function DELETE(req: Request) {
   await prisma.shiftPattern.delete({ where: { id } });
 
   // Audit log
-  prisma.auditLog.create({
+  await prisma.auditLog.create({
     data: {
       tenantId,
       actorUserId: user.id,
@@ -117,7 +118,7 @@ export async function DELETE(req: Request) {
       entityId: id,
       beforeJson: { name: pattern.name },
     },
-  }).catch((err) => console.error("[audit]", err));
+  });
 
   return NextResponse.json({ ok: true });
 }

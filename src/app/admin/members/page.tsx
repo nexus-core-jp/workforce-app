@@ -10,7 +10,13 @@ import { Logo } from "../../Logo";
 import { AddMemberForm } from "./AddMemberForm";
 import { MemberList } from "./MemberList";
 
-export default async function MembersPage() {
+const PAGE_SIZE = 50;
+
+export default async function MembersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
@@ -19,7 +25,10 @@ export default async function MembersPage() {
 
   if (user.role !== "ADMIN") redirect("/dashboard");
 
-  const [members, departments] = await Promise.all([
+  const params = await searchParams;
+  const page = Math.max(1, parseInt(params.page ?? "1", 10) || 1);
+
+  const [members, totalCount, departments] = await Promise.all([
     prisma.user.findMany({
       where: { tenantId: user.tenantId },
       orderBy: { createdAt: "asc" },
@@ -33,13 +42,18 @@ export default async function MembersPage() {
         departmentId: true,
         department: { select: { name: true } },
       },
+      skip: (page - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
     }),
+    prisma.user.count({ where: { tenantId: user.tenantId } }),
     prisma.department.findMany({
       where: { tenantId: user.tenantId },
       orderBy: { name: "asc" },
       select: { id: true, name: true },
     }),
   ]);
+
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   const membersUi = members.map((m) => ({
     id: m.id,
@@ -82,6 +96,18 @@ export default async function MembersPage() {
 
         <AddMemberForm departments={departmentsUi} />
         <MemberList members={membersUi} currentUserId={user.id} departments={departmentsUi} />
+
+        {totalPages > 1 && (
+          <nav style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 16 }}>
+            {page > 1 && (
+              <Link href={`/admin/members?page=${page - 1}`}>← 前へ</Link>
+            )}
+            <span>{page} / {totalPages}</span>
+            {page < totalPages && (
+              <Link href={`/admin/members?page=${page + 1}`}>次へ →</Link>
+            )}
+          </nav>
+        )}
       </main>
     </>
   );

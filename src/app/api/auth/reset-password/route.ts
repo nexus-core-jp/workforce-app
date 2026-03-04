@@ -48,6 +48,34 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "トークンの有効期限が切れています" }, { status: 400 });
   }
 
+  // Check password history (prevent reuse of last 3 passwords)
+  const recentPasswords = await prisma.passwordHistory.findMany({
+    where: { userId: resetToken.userId },
+    orderBy: { createdAt: "desc" },
+    take: 3,
+  });
+
+  for (const old of recentPasswords) {
+    const isReused = await bcrypt.compare(password, old.passwordHash);
+    if (isReused) {
+      return NextResponse.json(
+        { error: "過去3回以内に使用したパスワードは再利用できません" },
+        { status: 400 },
+      );
+    }
+  }
+
+  // Also check current password
+  if (resetToken.user.passwordHash) {
+    const isSame = await bcrypt.compare(password, resetToken.user.passwordHash);
+    if (isSame) {
+      return NextResponse.json(
+        { error: "現在のパスワードと同じパスワードは設定できません" },
+        { status: 400 },
+      );
+    }
+  }
+
   const passwordHash = await bcrypt.hash(password, 10);
 
   await prisma.$transaction([
@@ -58,6 +86,13 @@ export async function POST(request: Request) {
     prisma.passwordResetToken.update({
       where: { id: resetToken.id },
       data: { usedAt: new Date() },
+    }),
+    // Save to password history
+    prisma.passwordHistory.create({
+      data: {
+        userId: resetToken.userId,
+        passwordHash,
+      },
     }),
     prisma.auditLog.create({
       data: {

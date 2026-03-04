@@ -3,6 +3,8 @@ import type Stripe from "stripe";
 
 import { prisma } from "@/lib/db";
 import { getStripe } from "@/lib/stripe";
+import { logger } from "@/lib/logger";
+import { alertPaymentFailed } from "@/lib/alerts";
 
 export async function POST(request: Request) {
   const body = await request.text();
@@ -14,14 +16,27 @@ export async function POST(request: Request) {
 
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!webhookSecret) {
+    logger.error("STRIPE_WEBHOOK_SECRET is not configured");
     return NextResponse.json({ error: "Webhook not configured" }, { status: 500 });
   }
 
   let event: Stripe.Event;
   try {
     event = getStripe().webhooks.constructEvent(body, sig, webhookSecret);
-  } catch {
+  } catch (err) {
+    logger.error("[stripe-webhook] signature verification failed", err);
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
+  }
+
+  // Idempotency check: skip already-processed events
+  const existing = await prisma.auditLog.findFirst({
+    where: {
+      action: { startsWith: "STRIPE_" },
+      afterJson: { path: ["stripeEventId"], equals: event.id },
+    },
+  });
+  if (existing) {
+    return NextResponse.json({ received: true, deduplicated: true });
   }
 
   try {
@@ -30,7 +45,7 @@ export async function POST(request: Request) {
         const session = event.data.object as Stripe.Checkout.Session;
         const tenantId = session.metadata?.tenantId;
         if (!tenantId) {
-          console.error("[stripe-webhook] missing tenantId in checkout metadata");
+          logger.error("[stripe-webhook] missing tenantId in checkout metadata");
           break;
         }
         await prisma.tenant.update({
@@ -50,6 +65,7 @@ export async function POST(request: Request) {
               plan: "ACTIVE",
               subscriptionId: String(session.subscription ?? ""),
               amountTotal: session.amount_total,
+              stripeEventId: event.id,
             },
           },
         });
@@ -58,13 +74,7 @@ export async function POST(request: Request) {
 
       case "invoice.payment_succeeded": {
         const invoice = event.data.object as Stripe.Invoice;
-        const customerId = typeof invoice.customer === "string"
-          ? invoice.customer
-          : invoice.customer?.id ?? null;
-        if (!customerId) break;
-        const tenant = await prisma.tenant.findUnique({
-          where: { stripeCustomerId: customerId },
-        });
+        const tenant = await findTenantByCustomer(invoice.customer);
         if (tenant) {
           // Ensure ACTIVE plan on successful payment (recovers from past failures)
           if (tenant.plan !== "ACTIVE") {
@@ -79,12 +89,15 @@ export async function POST(request: Request) {
               action: "STRIPE_PAYMENT_SUCCEEDED",
               entityType: "Tenant",
               entityId: tenant.id,
+              beforeJson: { plan: tenant.plan },
               afterJson: {
+                plan: "ACTIVE",
                 invoiceId: invoice.id,
                 amountPaid: invoice.amount_paid,
                 currency: invoice.currency,
                 periodStart: invoice.period_start,
                 periodEnd: invoice.period_end,
+                stripeEventId: event.id,
               },
             },
           });
@@ -94,13 +107,7 @@ export async function POST(request: Request) {
 
       case "invoice.payment_failed": {
         const invoice = event.data.object as Stripe.Invoice;
-        const customerId = typeof invoice.customer === "string"
-          ? invoice.customer
-          : invoice.customer?.id ?? null;
-        if (!customerId) break;
-        const tenant = await prisma.tenant.findUnique({
-          where: { stripeCustomerId: customerId },
-        });
+        const tenant = await findTenantByCustomer(invoice.customer);
         if (tenant) {
           await prisma.tenant.update({
             where: { id: tenant.id },
@@ -117,22 +124,18 @@ export async function POST(request: Request) {
                 plan: "SUSPENDED",
                 invoiceId: invoice.id,
                 attemptCount: invoice.attempt_count,
+                stripeEventId: event.id,
               },
             },
           });
+          alertPaymentFailed(tenant.name, tenant.id);
         }
         break;
       }
 
       case "customer.subscription.updated": {
         const subscription = event.data.object as Stripe.Subscription;
-        const customerId = typeof subscription.customer === "string"
-          ? subscription.customer
-          : subscription.customer?.id ?? null;
-        if (!customerId) break;
-        const tenant = await prisma.tenant.findUnique({
-          where: { stripeCustomerId: customerId },
-        });
+        const tenant = await findTenantByCustomer(subscription.customer);
         if (tenant) {
           // Update plan based on subscription status
           let newPlan: "ACTIVE" | "SUSPENDED" = "ACTIVE";
@@ -155,8 +158,10 @@ export async function POST(request: Request) {
               beforeJson: { plan: tenant.plan },
               afterJson: {
                 plan: newPlan,
+                subscriptionId: subscription.id,
                 status: subscription.status,
                 cancelAtPeriodEnd: subscription.cancel_at_period_end,
+                stripeEventId: event.id,
               },
             },
           });
@@ -166,13 +171,7 @@ export async function POST(request: Request) {
 
       case "customer.subscription.deleted": {
         const subscription = event.data.object as Stripe.Subscription;
-        const customerId = typeof subscription.customer === "string"
-          ? subscription.customer
-          : subscription.customer?.id ?? null;
-        if (!customerId) break;
-        const tenant = await prisma.tenant.findUnique({
-          where: { stripeCustomerId: customerId },
-        });
+        const tenant = await findTenantByCustomer(subscription.customer);
         if (tenant) {
           await prisma.tenant.update({
             where: { id: tenant.id },
@@ -185,7 +184,7 @@ export async function POST(request: Request) {
               entityType: "Tenant",
               entityId: tenant.id,
               beforeJson: { plan: tenant.plan },
-              afterJson: { plan: "SUSPENDED" },
+              afterJson: { plan: "SUSPENDED", stripeEventId: event.id },
             },
           });
         }
@@ -193,12 +192,24 @@ export async function POST(request: Request) {
       }
     }
   } catch (err) {
-    console.error(`[stripe-webhook] error handling ${event.type}:`, err);
-    // Return 500 only for processing errors — Stripe will retry
+    logger.error(`[stripe-webhook] error handling ${event.type}`, err);
+    // Return 500 so Stripe retries
     return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 });
   }
 
   // Always return 200 for successfully verified events (even unhandled types)
   // to prevent Stripe from retrying indefinitely
   return NextResponse.json({ received: true });
+}
+
+async function findTenantByCustomer(
+  customer: string | Stripe.Customer | Stripe.DeletedCustomer | null,
+) {
+  const customerId =
+    typeof customer === "string" ? customer : customer?.id ?? null;
+  if (!customerId) return null;
+  return prisma.tenant.findUnique({
+    where: { stripeCustomerId: customerId },
+    select: { id: true, name: true, plan: true, stripeSubscriptionId: true },
+  });
 }

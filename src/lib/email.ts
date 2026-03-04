@@ -9,6 +9,9 @@ export async function sendPasswordResetEmail(
   userName: string,
 ) {
   if (!apiKey) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("RESEND_API_KEY is required in production");
+    }
     console.warn("[email] RESEND_API_KEY not set — skipping password reset email");
     return;
   }
@@ -33,47 +36,35 @@ export async function sendPasswordResetEmail(
   });
 }
 
-export async function sendWelcomeEmail(
+export async function sendEmailVerification(
   email: string,
-  userName: string,
-  tenantName: string,
-  slug: string,
-  authMethod: "password" | "line",
+  verifyUrl: string,
+  companyName: string,
 ) {
   if (!apiKey) {
-    console.warn("[email] RESEND_API_KEY not set — skipping welcome email");
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("RESEND_API_KEY is required in production");
+    }
+    console.warn("[email] RESEND_API_KEY not set — skipping verification email");
     return;
   }
 
   const resend = new Resend(apiKey);
-  const authUrl = process.env.AUTH_URL ?? "http://localhost:3002";
-  const loginUrl = `${authUrl}/login`;
-
-  const authNote =
-    authMethod === "line"
-      ? "ログイン方法: LINEアカウント（後からパスワードを設定することも可能です）"
-      : "ログイン方法: メールアドレス + パスワード";
 
   await resend.emails.send({
     from: "Workforce Nexus <noreply@workforce.app>",
     to: email,
-    subject: "【Workforce Nexus】ご登録ありがとうございます",
+    subject: "メールアドレスの確認 - Workforce Nexus",
     text: [
-      `${userName} 様`,
+      `${companyName} の管理者 様`,
       ``,
       `Workforce Nexus へのご登録ありがとうございます。`,
-      `以下の情報でログインできます。`,
+      `以下のリンクをクリックしてメールアドレスを確認してください。`,
       ``,
-      `━━━━━━━━━━━━━━━━━━━━━━━`,
-      `会社名: ${tenantName}`,
-      `会社ID: ${slug}`,
-      `メールアドレス: ${email}`,
-      `${authNote}`,
-      `━━━━━━━━━━━━━━━━━━━━━━━`,
+      verifyUrl,
       ``,
-      `ログインURL: ${loginUrl}`,
-      ``,
-      `ご不明な点がございましたら、お気軽にお問い合わせください。`,
+      `このリンクは24時間有効です。`,
+      `心当たりがない場合は、このメールを無視してください。`,
     ].join("\n"),
   });
 }
@@ -84,6 +75,9 @@ export async function sendRegistrationNotification(
   adminEmail: string,
 ) {
   if (!apiKey || !notificationEmail) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("RESEND_API_KEY and NOTIFICATION_EMAIL are required in production");
+    }
     console.warn(
       "[email] RESEND_API_KEY or NOTIFICATION_EMAIL not set — skipping notification",
     );

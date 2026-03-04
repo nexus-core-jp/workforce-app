@@ -49,15 +49,13 @@ export async function rateLimit(
       return { limited: true, retryAfterMs };
     }
 
-    // Record this request
-    await prisma.rateLimitEntry.create({ data: { key } });
-
-    // Periodically clean up old entries (non-blocking, 1% chance per request)
-    if (Math.random() < 0.01) {
-      prisma.rateLimitEntry
-        .deleteMany({ where: { createdAt: { lt: cutoff } } })
-        .catch(() => {});
-    }
+    // Record this request and clean up old entries atomically
+    await prisma.$transaction([
+      prisma.rateLimitEntry.create({ data: { key } }),
+      prisma.rateLimitEntry.deleteMany({
+        where: { createdAt: { lt: cutoff } },
+      }),
+    ]);
 
     return { limited: false };
   } catch {

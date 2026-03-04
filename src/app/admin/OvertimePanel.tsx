@@ -24,19 +24,23 @@ export function OvertimePanel({ defaultMonth }: { defaultMonth: string }) {
   const [month, setMonth] = useState(defaultMonth);
   const [summaries, setSummaries] = useState<OvertimeSummary[]>([]);
   const [alerts, setAlerts] = useState<OvertimeSummary[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const load = (m: string) => {
     startTransition(async () => {
+      setError(null);
       try {
         const res = await fetch(`/api/admin/overtime?month=${m}`);
         const data = await res.json();
         if (data.ok) {
           setSummaries(data.summaries);
           setAlerts(data.alerts);
+        } else {
+          setError(data.error ?? "データの取得に失敗しました");
         }
       } catch {
-        // ignore
+        setError("データの取得に失敗しました");
       }
     });
   };
@@ -82,6 +86,10 @@ export function OvertimePanel({ defaultMonth }: { defaultMonth: string }) {
             </div>
           ))}
         </div>
+      )}
+
+      {error && (
+        <p className="error-text" role="alert" style={{ marginBottom: 12 }}>{error}</p>
       )}
 
       {summaries.length === 0 ? (

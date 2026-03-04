@@ -6,12 +6,20 @@ import { toSessionUser } from "@/lib/session";
 import {
   STANDARD_DAILY_MINUTES,
   MONTHLY_OVERTIME_LIMIT_MINUTES,
-  calcDailyOvertime,
 } from "@/lib/overtime";
 import { startOfJstDay, addJstDays } from "@/lib/time";
 
 function jsonError(message: string, status = 400) {
   return NextResponse.json({ ok: false, error: message }, { status });
+}
+
+interface OvertimeRow {
+  userId: string;
+  userName: string;
+  userEmail: string;
+  totalWorkMinutes: bigint;
+  totalOvertimeMinutes: bigint;
+  workDays: bigint;
 }
 
 /** GET /api/admin/overtime?month=YYYY-MM */
@@ -38,79 +46,58 @@ export async function GET(req: NextRequest) {
   const year = parseInt(yearStr, 10);
   const mon = parseInt(monthStr, 10);
   const startDate = startOfJstDay(new Date(Date.UTC(year, mon - 1, 1)));
-  const endDate = startOfJstDay(new Date(Date.UTC(year, mon, 0))); // last day of month
+  const endDate = addJstDays(startOfJstDay(new Date(Date.UTC(year, mon, 0))), 1);
 
-  // Get all users in tenant
-  const users = await prisma.user.findMany({
-    where: { tenantId, active: true, role: { not: "SUPER_ADMIN" } },
-    select: { id: true, name: true, email: true },
-  });
+  // Single SQL query: aggregate work & overtime per user using DB-side computation
+  // Uses LEFT JOIN on shift assignments to get custom standard minutes,
+  // falling back to the default 480 (8h).
+  const rows = await prisma.$queryRaw<OvertimeRow[]>`
+    SELECT
+      u."id"    AS "userId",
+      COALESCE(u."name", u."email") AS "userName",
+      u."email" AS "userEmail",
+      COALESCE(SUM(te."workMinutes"), 0) AS "totalWorkMinutes",
+      COALESCE(SUM(GREATEST(0, te."workMinutes" - COALESCE(sp_std.standard_minutes, ${STANDARD_DAILY_MINUTES}))), 0) AS "totalOvertimeMinutes",
+      COUNT(te."id") AS "workDays"
+    FROM "User" u
+    LEFT JOIN "TimeEntry" te
+      ON te."userId" = u."id"
+      AND te."tenantId" = ${tenantId}
+      AND te."date" >= ${startDate}
+      AND te."date" < ${endDate}
+    LEFT JOIN LATERAL (
+      SELECT
+        ((SPLIT_PART(sp."plannedEnd", ':', 1)::int * 60 + SPLIT_PART(sp."plannedEnd", ':', 2)::int)
+        - (SPLIT_PART(sp."plannedStart", ':', 1)::int * 60 + SPLIT_PART(sp."plannedStart", ':', 2)::int)
+        - sp."defaultBreakMinutes") AS standard_minutes
+      FROM "ShiftAssignment" sa
+      JOIN "ShiftPattern" sp ON sp."id" = sa."shiftPatternId"
+      WHERE sa."userId" = u."id"
+        AND sa."tenantId" = ${tenantId}
+        AND sa."startDate" <= ${endDate}
+        AND sa."endDate" >= ${startDate}
+      ORDER BY sa."startDate" DESC
+      LIMIT 1
+    ) sp_std ON true
+    WHERE u."tenantId" = ${tenantId}
+      AND u."active" = true
+      AND u."role" != 'SUPER_ADMIN'
+    GROUP BY u."id", u."name", u."email", sp_std.standard_minutes
+    ORDER BY "totalOvertimeMinutes" DESC
+  `;
 
-  // Get all time entries for the month
-  const entries = await prisma.timeEntry.findMany({
-    where: {
-      tenantId,
-      date: { gte: startDate, lte: addJstDays(endDate, 1) },
-    },
-  });
-
-  // Get shift assignments for custom standard hours
-  const shiftAssignments = await prisma.shiftAssignment.findMany({
-    where: {
-      tenantId,
-      startDate: { lte: addJstDays(endDate, 1) },
-      endDate: { gte: startDate },
-    },
-    include: { shiftPattern: true },
-  });
-
-  // Build user shift map: userId -> standard minutes per day
-  const userStandardMinutes = new Map<string, number>();
-  for (const sa of shiftAssignments) {
-    if (sa.shiftPattern) {
-      const [startH, startM] = sa.shiftPattern.plannedStart.split(":").map(Number);
-      const [endH, endM] = sa.shiftPattern.plannedEnd.split(":").map(Number);
-      const planned = (endH * 60 + endM) - (startH * 60 + startM) - sa.shiftPattern.defaultBreakMinutes;
-      if (planned > 0) {
-        userStandardMinutes.set(sa.userId, planned);
-      }
-    }
-  }
-
-  // Group entries by user
-  const userEntries = new Map<string, number[]>();
-  for (const e of entries) {
-    const arr = userEntries.get(e.userId) ?? [];
-    arr.push(e.workMinutes);
-    userEntries.set(e.userId, arr);
-  }
-
-  // Calculate overtime for each user
-  const summaries = users.map((u) => {
-    const dailyMinutes = userEntries.get(u.id) ?? [];
-    const standardMin = userStandardMinutes.get(u.id) ?? STANDARD_DAILY_MINUTES;
-
-    let totalWork = 0;
-    let totalOvertime = 0;
-
-    for (const wm of dailyMinutes) {
-      totalWork += wm;
-      totalOvertime += calcDailyOvertime(wm, standardMin);
-    }
-
+  const summaries = rows.map((r) => {
+    const totalOvertimeMinutes = Number(r.totalOvertimeMinutes);
     return {
-      userId: u.id,
-      userName: u.name ?? u.email,
-      totalWorkMinutes: totalWork,
-      totalOvertimeMinutes: totalOvertime,
-      workDays: dailyMinutes.length,
-      exceeds36Agreement: totalOvertime > MONTHLY_OVERTIME_LIMIT_MINUTES,
-      overtimePercentage: Math.round((totalOvertime / MONTHLY_OVERTIME_LIMIT_MINUTES) * 100),
+      userId: r.userId,
+      userName: r.userName,
+      totalWorkMinutes: Number(r.totalWorkMinutes),
+      totalOvertimeMinutes,
+      workDays: Number(r.workDays),
+      exceeds36Agreement: totalOvertimeMinutes > MONTHLY_OVERTIME_LIMIT_MINUTES,
+      overtimePercentage: Math.round((totalOvertimeMinutes / MONTHLY_OVERTIME_LIMIT_MINUTES) * 100),
     };
   });
-
-  // Sort by overtime descending
-  summaries.sort((a, b) => b.totalOvertimeMinutes - a.totalOvertimeMinutes);
 
   return NextResponse.json({
     ok: true,

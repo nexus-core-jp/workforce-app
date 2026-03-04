@@ -7,6 +7,7 @@ import { toCsv } from "@/lib/csv";
 import { rateLimit } from "@/lib/rate-limit";
 import { toSessionUser } from "@/lib/session";
 import { formatLocal } from "@/lib/time";
+import { logger } from "@/lib/logger";
 
 const querySchema = z.object({
   type: z.enum(["attendance", "daily-reports", "members", "corrections", "leave-requests", "leave-balance", "audit-logs"]),
@@ -112,13 +113,16 @@ export async function GET(req: Request) {
       entityId: `${type}_${month}`,
       afterJson: { type, month },
     },
-  }).catch((err) => console.error("[audit]", err));
+  }).catch((err) => logger.error("audit.write_failed", {}, err));
+
+  const MAX_EXPORT_ROWS = 10000;
 
   if (type === "attendance") {
     const entries = await prisma.timeEntry.findMany({
       where: { tenantId, date: dateRange },
       orderBy: [{ date: "asc" }, { userId: "asc" }],
       include: { user: { select: { name: true, email: true } } },
+      take: MAX_EXPORT_ROWS,
     });
 
     const headers = [
@@ -151,6 +155,7 @@ export async function GET(req: Request) {
     where: { tenantId, date: dateRange },
     orderBy: [{ date: "asc" }, { userId: "asc" }],
     include: { user: { select: { name: true, email: true } } },
+    take: MAX_EXPORT_ROWS,
   });
 
   const headers = [

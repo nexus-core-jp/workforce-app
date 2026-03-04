@@ -576,6 +576,20 @@ nav {
   }
 }
 
+/* Admin navigation responsive */
+.admin-nav-mobile {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .admin-nav-desktop {
+    display: none !important;
+  }
+  .admin-nav-mobile {
+    display: block;
+  }
+}
+
 /* Standalone PWA safe areas */
 @supports (padding: env(safe-area-inset-top)) {
   .app-header {

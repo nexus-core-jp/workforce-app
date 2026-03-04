@@ -6,7 +6,8 @@ import { prisma } from "@/lib/db";
 import { toSessionUser } from "@/lib/session";
 
 const planSchema = z.object({
-  plan: z.enum(["TRIAL", "ACTIVE", "SUSPENDED"]),
+  plan: z.enum(["TRIAL", "ACTIVE", "SUSPENDED"]).optional(),
+  action: z.enum(["VIEW_PII"]).optional(),
 });
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -27,6 +28,24 @@ export async function POST(request: Request, ctx: Ctx) {
   const parsed = planSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid plan" }, { status: 400 });
+  }
+
+  // Handle PII viewing audit log
+  if (parsed.data.action === "VIEW_PII") {
+    await prisma.auditLog.create({
+      data: {
+        tenantId: id,
+        actorUserId: user.id,
+        action: "PII_VIEWED",
+        entityType: "Tenant",
+        entityId: id,
+      },
+    });
+    return NextResponse.json({ ok: true });
+  }
+
+  if (!parsed.data.plan) {
+    return NextResponse.json({ error: "plan is required" }, { status: 400 });
   }
 
   const tenant = await prisma.tenant.findUnique({ where: { id } });

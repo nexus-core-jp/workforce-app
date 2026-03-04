@@ -2,11 +2,14 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 
+import crypto from "crypto";
+
 import { prisma } from "@/lib/db";
-import { sendRegistrationNotification, sendWelcomeEmail } from "@/lib/email";
+import { sendRegistrationNotification, sendEmailVerification } from "@/lib/email";
 import { extractClientIp } from "@/lib/ip";
 import { passwordSchema } from "@/lib/password";
 import { rateLimit } from "@/lib/rate-limit";
+import { logger } from "@/lib/logger";
 
 const registerSchema = z.object({
   companyName: z.string().min(1, "会社名は必須です"),
@@ -54,6 +57,8 @@ export async function POST(request: Request) {
     const trialEndsAt = new Date();
     trialEndsAt.setDate(trialEndsAt.getDate() + 30);
 
+    const verifyToken = crypto.randomUUID();
+
     await prisma.$transaction(async (tx) => {
       const tenant = await tx.tenant.create({
         data: {
@@ -61,6 +66,7 @@ export async function POST(request: Request) {
           slug,
           plan: "TRIAL",
           trialEndsAt,
+          emailVerified: false,
         },
       });
 
@@ -71,6 +77,15 @@ export async function POST(request: Request) {
           name: adminName,
           role: "ADMIN",
           passwordHash,
+        },
+      });
+
+      // Create email verification token (24h expiry)
+      await tx.verificationToken.create({
+        data: {
+          identifier: tenant.id,
+          token: verifyToken,
+          expires: new Date(Date.now() + 24 * 60 * 60 * 1000),
         },
       });
 
@@ -86,17 +101,21 @@ export async function POST(request: Request) {
       });
     });
 
-    // Fire-and-forget emails
-    sendWelcomeEmail(email, adminName, companyName, slug, "password").catch((err) => {
-      console.error("[register] welcome email failed:", err);
-    });
-    sendRegistrationNotification(companyName, slug, email).catch((err) => {
-      console.error("[register] notification email failed:", err);
+    // Send verification email
+    const baseUrl = process.env.AUTH_URL || "http://localhost:3002";
+    const verifyUrl = `${baseUrl}/verify-email?token=${verifyToken}`;
+    sendEmailVerification(email, verifyUrl, companyName).catch((err) => {
+      logger.error("[register] verification email failed", err);
     });
 
-    return NextResponse.json({ ok: true });
+    // Fire-and-forget admin notification
+    sendRegistrationNotification(companyName, slug, email).catch((err) => {
+      logger.error("[register] notification email failed", err);
+    });
+
+    return NextResponse.json({ ok: true, emailVerificationRequired: true });
   } catch (err) {
-    console.error("[register]", err);
+    logger.error("[register] registration failed", err);
 
     // Provide more specific error messages
     const message = err instanceof Error ? err.message : "";

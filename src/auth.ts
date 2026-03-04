@@ -8,15 +8,26 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { rateLimit } from "@/lib/rate-limit";
+import { verifyTotp } from "@/lib/totp";
 import { LineProvider } from "@/lib/line-provider";
 
 import type { Provider } from "next-auth/providers";
+
+// Validate AUTH_SECRET at module load time
+if (!process.env.AUTH_SECRET || process.env.AUTH_SECRET.length < 32) {
+  throw new Error(
+    "AUTH_SECRET must be set and at least 32 characters. Generate with: openssl rand -base64 48",
+  );
+}
 
 const signInSchema = z.object({
   tenant: z.string().min(1),
   email: z.string().email(),
   password: z.string().min(8),
+  totpCode: z.string().optional(), // 6-digit TOTP code (required if 2FA enabled)
 });
+
+const isProduction = process.env.NODE_ENV === "production";
 
 // Build providers list — LINE is only added when env vars are configured
 const providers: Provider[] = [
@@ -26,9 +37,10 @@ const providers: Provider[] = [
       tenant: { label: "Tenant", type: "text" },
       email: { label: "Email", type: "email" },
       password: { label: "Password", type: "password" },
+      totpCode: { label: "TOTP Code", type: "text" },
     },
     async authorize(raw) {
-      const { tenant, email, password } = signInSchema.parse(raw);
+      const { tenant, email, password, totpCode } = signInSchema.parse(raw);
 
       // Rate limit: 10 attempts per tenant+email per 15 minutes
       const { limited } = await rateLimit(`login:${tenant}:${email}`, 10, 15 * 60 * 1000);
@@ -57,6 +69,28 @@ const providers: Provider[] = [
           },
         }).catch((err) => logger.error("audit.write_failed", {}, err));
         return null;
+      }
+
+      // Check TOTP if 2FA is enabled
+      if (user.totpEnabled && user.totpSecret) {
+        if (!totpCode) {
+          // Signal the client that TOTP is required (throw with specific message)
+          throw new Error("TOTP_REQUIRED");
+        }
+        const totpValid = verifyTotp(user.totpSecret, totpCode);
+        if (!totpValid) {
+          prisma.auditLog.create({
+            data: {
+              tenantId: dbTenant.id,
+              actorUserId: user.id,
+              action: "LOGIN_FAILED",
+              entityType: "User",
+              entityId: user.id,
+              afterJson: { reason: "invalid_totp" },
+            },
+          }).catch((err) => logger.error("audit.write_failed", {}, err));
+          throw new Error("TOTP_INVALID");
+        }
       }
 
       // Audit: login success
@@ -96,7 +130,23 @@ if (process.env.LINE_CHANNEL_ID && process.env.LINE_CHANNEL_SECRET) {
 export const { handlers, auth, signIn, signOut } = NextAuth({
   // PrismaAdapter is removed: Credentials provider + JWT sessions don't need
   // a database adapter. We handle user lookup directly in authorize().
-  session: { strategy: "jwt" },
+  session: {
+    strategy: "jwt",
+    maxAge: 24 * 60 * 60, // 24 hours
+  },
+  cookies: {
+    sessionToken: {
+      name: isProduction
+        ? "__Secure-next-auth.session-token"
+        : "next-auth.session-token",
+      options: {
+        httpOnly: true,
+        sameSite: "strict",
+        path: "/",
+        secure: isProduction,
+      },
+    },
+  },
   providers,
   pages: {
     signIn: "/login",
