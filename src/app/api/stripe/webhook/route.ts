@@ -24,7 +24,7 @@ export async function POST(request: Request) {
   try {
     event = getStripe().webhooks.constructEvent(body, sig, webhookSecret);
   } catch (err) {
-    logger.error("[stripe-webhook] signature verification failed", err);
+    logger.error("[stripe-webhook] signature verification failed", {}, err);
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
@@ -192,7 +192,7 @@ export async function POST(request: Request) {
       }
     }
   } catch (err) {
-    logger.error(`[stripe-webhook] error handling ${event.type}`, err);
+    logger.error(`[stripe-webhook] error handling ${event.type}`, {}, err);
     // Return 500 so Stripe retries
     return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 });
   }

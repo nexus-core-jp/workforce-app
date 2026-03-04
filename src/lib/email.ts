@@ -69,6 +69,39 @@ export async function sendEmailVerification(
   });
 }
 
+export async function sendWelcomeEmail(
+  email: string,
+  adminName: string,
+  companyName: string,
+  slug: string,
+  _method: string = "email",
+) {
+  if (!apiKey) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("RESEND_API_KEY is required in production");
+    }
+    console.warn("[email] RESEND_API_KEY not set — skipping welcome email");
+    return;
+  }
+
+  const resend = new Resend(apiKey);
+
+  await resend.emails.send({
+    from: "Workforce Nexus <noreply@workforce.app>",
+    to: email,
+    subject: "ようこそ Workforce Nexus へ",
+    text: [
+      `${adminName} 様`,
+      ``,
+      `${companyName} の Workforce Nexus への登録が完了しました。`,
+      `会社ID: ${slug}`,
+      ``,
+      `以下のURLからログインできます:`,
+      `${process.env.AUTH_URL || "http://localhost:3002"}/login`,
+    ].join("\n"),
+  });
+}
+
 export async function sendRegistrationNotification(
   tenantName: string,
   slug: string,

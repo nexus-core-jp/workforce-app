@@ -105,17 +105,17 @@ export async function POST(request: Request) {
     const baseUrl = process.env.AUTH_URL || "http://localhost:3002";
     const verifyUrl = `${baseUrl}/verify-email?token=${verifyToken}`;
     sendEmailVerification(email, verifyUrl, companyName).catch((err) => {
-      logger.error("[register] verification email failed", err);
+      logger.error("[register] verification email failed", {}, err);
     });
 
     // Fire-and-forget admin notification
     sendRegistrationNotification(companyName, slug, email).catch((err) => {
-      logger.error("[register] notification email failed", err);
+      logger.error("[register] notification email failed", {}, err);
     });
 
     return NextResponse.json({ ok: true, emailVerificationRequired: true });
   } catch (err) {
-    logger.error("[register] registration failed", err);
+    logger.error("[register] registration failed", {}, err);
 
     // Provide more specific error messages
     const message = err instanceof Error ? err.message : "";

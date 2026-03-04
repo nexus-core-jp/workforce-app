@@ -72,7 +72,7 @@ export function sendAlert(payload: AlertPayload) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   }).catch((err) => {
-    logger.error("[alerts] Failed to send Slack alert", err);
+    logger.error("[alerts] Failed to send Slack alert", {}, err);
   });
 }
 
