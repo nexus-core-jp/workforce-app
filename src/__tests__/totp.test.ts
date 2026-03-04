@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import * as OTPAuth from "otpauth";
 import { generateTotpSecret, verifyTotp } from "@/lib/totp";
 
 describe("TOTP", () => {
@@ -13,8 +14,6 @@ describe("TOTP", () => {
 
   it("verifies a valid TOTP code", () => {
     const { secret } = generateTotpSecret("test@example.com");
-    // Generate a valid code using the same library
-    const OTPAuth = require("otpauth");
     const totp = new OTPAuth.TOTP({
       issuer: "Workforce Nexus",
       algorithm: "SHA1",

@@ -9,7 +9,6 @@ import { prisma } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { rateLimit } from "@/lib/rate-limit";
 import { verifyTotp } from "@/lib/totp";
-import { LineProvider } from "@/lib/line-provider";
 
 import type { Provider } from "next-auth/providers";
 

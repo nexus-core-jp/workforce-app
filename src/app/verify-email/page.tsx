@@ -10,18 +10,19 @@ function VerifyEmailInner() {
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    if (!token) {
-      setStatus("error");
-      setMessage("無効なリンクです。");
-      return;
-    }
+    async function verify() {
+      if (!token) {
+        setStatus("error");
+        setMessage("無効なリンクです。");
+        return;
+      }
 
-    fetch("/api/auth/verify-email", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token }),
-    })
-      .then(async (res) => {
+      try {
+        const res = await fetch("/api/auth/verify-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token }),
+        });
         if (res.ok) {
           setStatus("success");
           setMessage("メールアドレスが確認されました。ログインしてご利用ください。");
@@ -30,11 +31,12 @@ function VerifyEmailInner() {
           setStatus("error");
           setMessage(data.error || "検証に失敗しました。");
         }
-      })
-      .catch(() => {
+      } catch {
         setStatus("error");
         setMessage("通信エラーが発生しました。");
-      });
+      }
+    }
+    verify();
   }, [token]);
 
   return (

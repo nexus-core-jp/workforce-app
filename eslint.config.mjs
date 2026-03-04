@@ -13,6 +13,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Generated Prisma client
     "src/generated/**",
+    // k6 load tests (uses k6's own module system)
+    "k6/**",
   ]),
 ]);
 
