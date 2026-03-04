@@ -88,7 +88,7 @@ npm run dev
 - `/corrections/new?date=YYYY-MM-DD`
 - 修正したい時刻（出勤・退勤・休憩開始・休憩終了）と理由を入力して申請
 
-### 承認（ADMIN/APPROVER）
+### 承認（ADMIN）
 - `/dashboard` に「打刻修正申請（承認）」が表示され、未処理を承認/却下できます
 - 承認すると申請された時刻が TimeEntry に自動反映されます
 
