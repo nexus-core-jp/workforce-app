@@ -2,65 +2,83 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
+import { logoutWithAudit } from "@/lib/logout-action";
 import { prisma } from "@/lib/db";
+import { toSessionUser } from "@/lib/session";
 
-import { DepartmentCreateForm } from "./DepartmentCreateForm";
+import { Logo } from "../../Logo";
+import { DepartmentManager } from "./DepartmentManager";
 
 export default async function DepartmentsPage() {
   const session = await auth();
-  if (!session) redirect("/login");
-  if (session.user.role !== "ADMIN") redirect("/dashboard");
+  if (!session?.user) redirect("/login");
 
-  const tenantId = session.user.tenantId;
+  const user = toSessionUser(session.user as Record<string, unknown>);
+  if (!user) redirect("/login");
 
-  const departments = await prisma.department.findMany({
-    where: { tenantId },
-    orderBy: { name: "asc" },
-    include: {
-      approver: { select: { name: true, email: true } },
-      _count: { select: { users: true } },
-    },
-  });
+  if (user.role !== "ADMIN") redirect("/dashboard");
 
-  const users = await prisma.user.findMany({
-    where: { tenantId, active: true },
-    select: { id: true, name: true, email: true },
-    orderBy: { name: "asc" },
-  });
+  const [departments, approverCandidates] = await Promise.all([
+    prisma.department.findMany({
+      where: { tenantId: user.tenantId },
+      orderBy: { name: "asc" },
+      include: {
+        approver: { select: { id: true, name: true, email: true } },
+        _count: { select: { users: true } },
+      },
+    }),
+    prisma.user.findMany({
+      where: {
+        tenantId: user.tenantId,
+        active: true,
+        role: "ADMIN",
+      },
+      select: { id: true, name: true, email: true },
+      orderBy: { name: "asc" },
+    }),
+  ]);
+
+  const departmentsUi = departments.map((d) => ({
+    id: d.id,
+    name: d.name,
+    approverUserId: d.approverUserId,
+    approverLabel: d.approver ? (d.approver.name ?? d.approver.email) : null,
+    memberCount: d._count.users,
+  }));
+
+  const approversUi = approverCandidates.map((u) => ({
+    id: u.id,
+    label: u.name ?? u.email,
+  }));
 
   return (
-    <main style={{ padding: 24, fontFamily: "system-ui" }}>
-      <h1>部署管理</h1>
+    <>
+      <header className="app-header">
+        <h1><Logo /></h1>
+        <div className="user-info">
+          <span>{user.name ?? user.email}</span>
+          <span className="badge badge-closed">管理者</span>
+          <form
+            action={async () => {
+              "use server";
+              await logoutWithAudit();
+            }}
+          >
+            <button type="submit" className="btn-compact">
+              ログアウト
+            </button>
+          </form>
+        </div>
+      </header>
 
-      <section style={{ marginTop: 16 }}>
-        <table>
-          <thead>
-            <tr>
-              <th>部署名</th>
-              <th>承認者</th>
-              <th>所属人数</th>
-            </tr>
-          </thead>
-          <tbody>
-            {departments.map((d) => (
-              <tr key={d.id}>
-                <td>{d.name}</td>
-                <td>{d.approver ? (d.approver.name ?? d.approver.email) : "未設定"}</td>
-                <td>{d._count.users}</td>
-              </tr>
-            ))}
-            {departments.length === 0 && (
-              <tr><td colSpan={3} style={{ textAlign: "center", opacity: 0.6 }}>部署なし</td></tr>
-            )}
-          </tbody>
-        </table>
-      </section>
+      <main className="page-container">
+        <nav style={{ display: "flex", gap: 12, marginBottom: 8 }}>
+          <Link href="/admin">← 管理画面</Link>
+          <Link href="/dashboard">マイページ</Link>
+        </nav>
 
-      <DepartmentCreateForm users={users.map((u) => ({ id: u.id, label: u.name ?? u.email }))} />
-
-      <nav style={{ marginTop: 24 }}>
-        <Link href="/dashboard">← ダッシュボード</Link>
-      </nav>
-    </main>
+        <DepartmentManager departments={departmentsUi} approvers={approversUi} />
+      </main>
+    </>
   );
 }

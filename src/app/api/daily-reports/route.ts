@@ -130,8 +130,8 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: true, report: report ?? null });
   }
 
-  // Admin/Approver can see all reports for the tenant
-  const isAdmin = role === "ADMIN" || role === "APPROVER";
+  // Admin can see all reports for the tenant
+  const isAdmin = role === "ADMIN";
   const reports = await prisma.dailyReport.findMany({
     where: {
       tenantId,

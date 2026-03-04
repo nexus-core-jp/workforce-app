@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
   if (!user) return jsonError("Invalid session", 401);
 
   const { tenantId, role } = user;
-  if (role !== "ADMIN" && role !== "APPROVER") return jsonError("Forbidden", 403);
+  if (role !== "ADMIN") return jsonError("Forbidden", 403);
 
   const monthParam = req.nextUrl.searchParams.get("month");
   const now = new Date();

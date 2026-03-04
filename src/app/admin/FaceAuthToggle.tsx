@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-export function FaceAuthToggle({ enabled, kioskUrl }: { enabled: boolean; kioskUrl: string }) {
+export function FaceAuthToggle({ enabled, kioskUrl, registeredUsers, totalUsers }: { enabled: boolean; kioskUrl: string; registeredUsers: number; totalUsers: number }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,6 +59,10 @@ export function FaceAuthToggle({ enabled, kioskUrl }: { enabled: boolean; kioskU
           borderRadius: 8,
           fontSize: 13,
         }}>
+          <div style={{ marginBottom: 8 }}>
+            <strong>顔データ登録状況:</strong>{" "}
+            <span>{registeredUsers} / {totalUsers} 名が登録済み</span>
+          </div>
           <div style={{ marginBottom: 8 }}>
             <strong>キオスク端末URL:</strong>{" "}
             <code style={{ background: "var(--color-bg)", padding: "2px 6px", borderRadius: 4 }}>

@@ -79,7 +79,7 @@ describe("toSessionUser", () => {
       email: "test@example.com",
       name: null,
       tenantId: "tenant1",
-      role: "APPROVER",
+      role: "ADMIN",
     };
     const result = toSessionUser(raw);
     expect(result?.name).toBeNull();

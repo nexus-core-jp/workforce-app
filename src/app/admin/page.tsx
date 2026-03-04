@@ -28,8 +28,8 @@ export default async function AdminPage() {
 
   const { tenantId, role } = user;
 
-  // Only ADMIN and APPROVER can access this page
-  if (role !== "ADMIN" && role !== "APPROVER") {
+  // Only ADMIN can access this page
+  if (role !== "ADMIN") {
     redirect("/dashboard");
   }
 
@@ -231,6 +231,17 @@ export default async function AdminPage() {
     };
   });
 
+  // Face auth: count of users with registered descriptors (ADMIN only)
+  const faceAuthRegisteredUsers =
+    tenant?.faceAuthEnabled
+      ? (
+          await prisma.faceDescriptor.groupBy({
+            by: ["userId"],
+            where: { tenantId },
+          })
+        ).length
+      : 0;
+
   const roleLabel = role === "ADMIN" ? "管理者" : "承認者";
 
   return (
@@ -239,7 +250,7 @@ export default async function AdminPage() {
         <h1><Logo /></h1>
         <div className="user-info">
           <span>{user.name ?? user.email}</span>
-          <span className={`badge ${role === "ADMIN" ? "badge-closed" : "badge-pending"}`}>
+          <span className="badge badge-closed">
             {roleLabel}
           </span>
           <NotificationBell />
@@ -281,6 +292,7 @@ export default async function AdminPage() {
         <nav style={{ display: "flex", gap: 12, marginBottom: 8, flexWrap: "wrap" }}>
           <Link href="/dashboard">← マイページ</Link>
           {role === "ADMIN" && <Link href="/admin/members">メンバー管理</Link>}
+          {role === "ADMIN" && <Link href="/admin/departments">部署管理</Link>}
           {role === "ADMIN" && <Link href="/admin/shifts">シフト管理</Link>}
           {role === "ADMIN" && <Link href="/admin/payroll">給与設定</Link>}
           {role === "ADMIN" && <Link href="/admin/payroll/calc">給与計算</Link>}
@@ -323,10 +335,8 @@ export default async function AdminPage() {
         {/* Today's attendance status */}
         <AttendanceStatus items={attendanceStatusItems} />
 
-        {/* Monthly close — ADMIN only */}
-        {role === "ADMIN" && (
-          <ClosePanel isAdmin={true} month={month} isClosed={!!companyClose} />
-        )}
+        {/* Monthly close */}
+        <ClosePanel isAdmin={true} month={month} isClosed={!!companyClose} />
 
         {/* Overtime Report */}
         <OvertimePanel defaultMonth={month} />
@@ -351,6 +361,8 @@ export default async function AdminPage() {
           <FaceAuthToggle
             enabled={tenant.faceAuthEnabled}
             kioskUrl={`/kiosk/${tenant.slug}`}
+            registeredUsers={faceAuthRegisteredUsers}
+            totalUsers={allMembers.length}
           />
         )}
       </main>

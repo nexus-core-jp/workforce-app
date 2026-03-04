@@ -30,7 +30,7 @@ export async function GET(req: Request) {
   if (!user) return jsonError("Invalid session", 401);
 
   const { tenantId, id: actorId, role } = user;
-  if (role !== "ADMIN" && role !== "APPROVER") return jsonError("Forbidden", 403);
+  if (role !== "ADMIN") return jsonError("Forbidden", 403);
 
   // Rate limit: 10 exports per user per hour
   const { limited } = await rateLimit(`export:${actorId}`, 10, 60 * 60 * 1000);
