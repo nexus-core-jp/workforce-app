@@ -86,7 +86,7 @@ export function MemberList({
   return (
     <section>
       <h2 style={{ marginBottom: 12 }}>メンバー一覧（{members.length} 名）</h2>
-      {error && <p className="error-text" role="alert">{error}</p>}
+      {error && <p className="error-text" role="alert" style={{ marginBottom: 12 }}>{error}</p>}
 
       <div className="table-scroll">
         <table>

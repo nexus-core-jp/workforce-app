@@ -106,7 +106,7 @@ function LoginForm() {
           <fieldset disabled={loading} style={{ display: "contents", border: "none", padding: 0, margin: 0 }}>
             <label style={{ display: "grid", gap: 6 }}>
               <span>会社ID</span>
-              <input value={tenant} onChange={(e) => setTenant(e.target.value)} required autoComplete="organization" />
+              <input value={tenant} onChange={(e) => setTenant(e.target.value)} required autoComplete="organization" placeholder="例: demo" />
             </label>
 
             <label style={{ display: "grid", gap: 6 }}>
@@ -117,6 +117,7 @@ function LoginForm() {
                 type="email"
                 required
                 autoComplete="email"
+                placeholder="you@example.com"
               />
             </label>
 

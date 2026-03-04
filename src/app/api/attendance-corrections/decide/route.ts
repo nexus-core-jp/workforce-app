@@ -3,15 +3,14 @@ import { z } from "zod";
 
 import { Prisma } from "@/generated/prisma";
 import { auth } from "@/auth";
+import { ERROR_MESSAGES } from "@/lib/constants";
+import { jsonError } from "@/lib/api";
+import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/db";
 import { toSessionUser } from "@/lib/session";
 import { guardSuspended } from "@/lib/tenant-guard";
 import { createNotification } from "@/lib/notify";
 import { diffMinutes } from "@/lib/time";
-
-function jsonError(message: string, status = 400) {
-  return NextResponse.json({ ok: false, error: message }, { status });
-}
 
 const schema = z.object({
   id: z.string().min(1),
@@ -34,56 +33,64 @@ export async function POST(req: Request) {
 
   const raw = await req.json().catch(() => null);
   const input = schema.safeParse(raw);
-  if (!input.success) return jsonError(input.error.message);
+  if (!input.success) return jsonError(ERROR_MESSAGES.INVALID_INPUT);
 
   const correction = await prisma.attendanceCorrection.findUnique({ where: { id: input.data.id } });
-  if (!correction || correction.tenantId !== tenantId) return jsonError("Not found", 404);
-  if (correction.status !== "PENDING") return jsonError("Already decided", 409);
+  if (!correction || correction.tenantId !== tenantId) return jsonError(ERROR_MESSAGES.NOT_FOUND, 404);
+  if (correction.status !== "PENDING") return jsonError(ERROR_MESSAGES.ALREADY_DECIDED, 409);
 
-  const decidedAt = new Date();
+  // Prevent self-approval
+  if (correction.userId === approverUserId) {
+    return jsonError("Cannot approve your own correction request", 403);
+  }
 
-  // Wrap all state mutations in a single transaction for data integrity
-  if (input.data.decision === "APPROVED") {
-    const entry = await prisma.timeEntry.findUnique({
-      where: {
-        tenantId_userId_date: {
-          tenantId: correction.tenantId,
-          userId: correction.userId,
-          date: correction.date,
-        },
+  await prisma.$transaction(async (tx) => {
+    await tx.attendanceCorrection.update({
+      where: { id: correction.id },
+      data: {
+        status: input.data.decision,
+        approverUserId,
+        decidedAt: new Date(),
       },
     });
 
-    if (entry) {
-      const beforeSnapshot = {
-        clockInAt: entry.clockInAt,
-        clockOutAt: entry.clockOutAt,
-        breakStartAt: entry.breakStartAt,
-        breakEndAt: entry.breakEndAt,
-        workMinutes: entry.workMinutes,
-      };
+    // When approved, apply the requested times to the TimeEntry
+    if (input.data.decision === "APPROVED") {
+      const entry = await tx.timeEntry.findUnique({
+        where: {
+          tenantId_userId_date: {
+            tenantId: correction.tenantId,
+            userId: correction.userId,
+            date: correction.date,
+          },
+        },
+      });
 
-      const newClockInAt = correction.requestedClockInAt ?? entry.clockInAt;
-      const newClockOutAt = correction.requestedClockOutAt ?? entry.clockOutAt;
-      const newBreakStartAt = correction.requestedBreakStartAt ?? entry.breakStartAt;
-      const newBreakEndAt = correction.requestedBreakEndAt ?? entry.breakEndAt;
+      if (entry) {
+        const beforeSnapshot = {
+          clockInAt: entry.clockInAt,
+          clockOutAt: entry.clockOutAt,
+          breakStartAt: entry.breakStartAt,
+          breakEndAt: entry.breakEndAt,
+          workMinutes: entry.workMinutes,
+        };
 
-      let workMinutes = 0;
-      if (newClockInAt && newClockOutAt) {
-        const total = diffMinutes(newClockInAt, newClockOutAt);
-        let breakMin = 0;
-        if (newBreakStartAt && newBreakEndAt) {
-          breakMin = Math.max(0, diffMinutes(newBreakStartAt, newBreakEndAt));
+        const newClockInAt = correction.requestedClockInAt ?? entry.clockInAt;
+        const newClockOutAt = correction.requestedClockOutAt ?? entry.clockOutAt;
+        const newBreakStartAt = correction.requestedBreakStartAt ?? entry.breakStartAt;
+        const newBreakEndAt = correction.requestedBreakEndAt ?? entry.breakEndAt;
+
+        let workMinutes = 0;
+        if (newClockInAt && newClockOutAt) {
+          const total = diffMinutes(newClockInAt, newClockOutAt);
+          let breakMin = 0;
+          if (newBreakStartAt && newBreakEndAt) {
+            breakMin = Math.max(0, diffMinutes(newBreakStartAt, newBreakEndAt));
+          }
+          workMinutes = Math.max(0, total - breakMin);
         }
-        workMinutes = Math.max(0, total - breakMin);
-      }
 
-      await prisma.$transaction([
-        prisma.attendanceCorrection.update({
-          where: { id: correction.id },
-          data: { status: "APPROVED", approverUserId, decidedAt },
-        }),
-        prisma.timeEntry.update({
+        const updatedEntry = await tx.timeEntry.update({
           where: { id: entry.id },
           data: {
             clockInAt: newClockInAt,
@@ -92,8 +99,10 @@ export async function POST(req: Request) {
             breakEndAt: newBreakEndAt,
             workMinutes,
           },
-        }),
-        prisma.auditLog.create({
+        });
+
+        // Audit log
+        await tx.auditLog.create({
           data: {
             tenantId,
             actorUserId: approverUserId,
@@ -102,23 +111,18 @@ export async function POST(req: Request) {
             entityId: entry.id,
             beforeJson: beforeSnapshot,
             afterJson: {
-              clockInAt: newClockInAt,
-              clockOutAt: newClockOutAt,
-              breakStartAt: newBreakStartAt,
-              breakEndAt: newBreakEndAt,
-              workMinutes,
+              clockInAt: updatedEntry.clockInAt,
+              clockOutAt: updatedEntry.clockOutAt,
+              breakStartAt: updatedEntry.breakStartAt,
+              breakEndAt: updatedEntry.breakEndAt,
+              workMinutes: updatedEntry.workMinutes,
               correctionId: correction.id,
             },
           },
-        }),
-      ]);
-    } else {
-      await prisma.$transaction([
-        prisma.attendanceCorrection.update({
-          where: { id: correction.id },
-          data: { status: "APPROVED", approverUserId, decidedAt },
-        }),
-        prisma.auditLog.create({
+        });
+      } else {
+        // No matching time entry found
+        await tx.auditLog.create({
           data: {
             tenantId,
             actorUserId: approverUserId,
@@ -128,16 +132,11 @@ export async function POST(req: Request) {
             beforeJson: Prisma.JsonNull,
             afterJson: { note: "No matching time entry found" },
           },
-        }),
-      ]);
-    }
-  } else {
-    await prisma.$transaction([
-      prisma.attendanceCorrection.update({
-        where: { id: correction.id },
-        data: { status: "REJECTED", approverUserId, decidedAt },
-      }),
-      prisma.auditLog.create({
+        });
+      }
+    } else {
+      // Audit log for rejection
+      await tx.auditLog.create({
         data: {
           tenantId,
           actorUserId: approverUserId,
@@ -147,9 +146,20 @@ export async function POST(req: Request) {
           beforeJson: Prisma.JsonNull,
           afterJson: { reason: correction.reason, decision: "REJECTED" },
         },
-      }),
-    ]);
-  }
+      });
+    }
+  });
+
+  // Also write via writeAuditLog for the audit library
+  await writeAuditLog({
+    tenantId,
+    actorUserId: approverUserId,
+    action: `CORRECTION_${input.data.decision}`,
+    entityType: "AttendanceCorrection",
+    entityId: correction.id,
+    before: { status: correction.status },
+    after: { status: input.data.decision, approverUserId },
+  });
 
   // Notify the requester
   const decisionLabel = input.data.decision === "APPROVED" ? "承認" : "却下";

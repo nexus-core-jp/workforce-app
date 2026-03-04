@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { logoutWithAudit } from "@/lib/logout-action";
+import { HISTORY_DAYS, LOCALE, DATE_LOCALE, TIMEZONE, PENDING_CORRECTIONS_LIMIT } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { toSessionUser } from "@/lib/session";
 import { addJstDays, formatLocal, startOfJstDay } from "@/lib/time";
@@ -27,6 +28,8 @@ export default async function DashboardPage() {
 
   const today = startOfJstDay(new Date());
   const from = addJstDays(today, -6);
+
+  // Monthly overtime date range
   const currentMonth = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Tokyo",
     year: "numeric",
@@ -35,18 +38,8 @@ export default async function DashboardPage() {
   const [cYear, cMon] = currentMonth.split("-").map(Number);
   const monthStart = startOfJstDay(new Date(Date.UTC(cYear, cMon - 1, 1)));
 
-  // Parallelize all independent DB queries
-  const [
-    tenant,
-    entry,
-    history,
-    myPendingCount,
-    leaveLedger,
-    myPendingLeaves,
-    monthEntries,
-    faceDescCount,
-    dailyReport,
-  ] = await Promise.all([
+  // Parallelize independent DB queries for faster page load
+  const [tenant, entry, history, myPendingCount, dailyReport, leaveLedger, myPendingLeaves, monthEntries, faceDescriptorCount] = await Promise.all([
     prisma.tenant.findUnique({
       where: { id: tenantId },
       select: { plan: true, trialEndsAt: true, faceAuthEnabled: true },
@@ -61,6 +54,9 @@ export default async function DashboardPage() {
     prisma.attendanceCorrection.count({
       where: { tenantId, userId, status: "PENDING" },
     }),
+    prisma.dailyReport.findUnique({
+      where: { tenantId_userId_date: { tenantId, userId, date: today } },
+    }),
     prisma.leaveLedgerEntry.findMany({
       where: { tenantId, userId },
     }),
@@ -70,9 +66,8 @@ export default async function DashboardPage() {
     prisma.timeEntry.findMany({
       where: { tenantId, userId, date: { gte: monthStart, lte: today } },
     }),
-    prisma.faceDescriptor.count({ where: { tenantId, userId } }),
-    prisma.dailyReport.findUnique({
-      where: { tenantId_userId_date: { tenantId, userId, date: today } },
+    prisma.faceDescriptor.count({
+      where: { tenantId, userId },
     }),
   ]);
 
@@ -87,14 +82,13 @@ export default async function DashboardPage() {
   const canClockOut = !!clockInAt && !clockOutAt && (!breakStartAt || !!breakEndAt);
 
   const historyMap = new Map(history.map((h) => [h.date.toISOString(), h]));
-  const historyItems = Array.from({ length: 7 }, (_, i) => {
+  const historyItems = Array.from({ length: HISTORY_DAYS }, (_, i) => {
     const d = addJstDays(today, -i);
     const iso = d.toISOString();
     const h = historyMap.get(iso);
 
-    const dateLabel = new Intl.DateTimeFormat("ja-JP", {
-      timeZone: "Asia/Tokyo",
-      year: "numeric",
+    const dateLabel = new Intl.DateTimeFormat(LOCALE, {
+      timeZone: TIMEZONE,
       month: "2-digit",
       day: "2-digit",
       weekday: "short",
@@ -102,8 +96,8 @@ export default async function DashboardPage() {
 
     return {
       dateLabel,
-      dateYmd: new Intl.DateTimeFormat("en-CA", {
-        timeZone: "Asia/Tokyo",
+      dateYmd: new Intl.DateTimeFormat(DATE_LOCALE, {
+        timeZone: TIMEZONE,
         year: "numeric",
         month: "2-digit",
         day: "2-digit",
@@ -116,16 +110,18 @@ export default async function DashboardPage() {
     };
   });
 
+  // Leave balance
   let leaveBalance = 0;
-  for (const le of leaveLedger) {
-    const days = Number(le.days);
-    if (le.kind === "USE") {
+  for (const ledgerEntry of leaveLedger) {
+    const days = Number(ledgerEntry.days);
+    if (ledgerEntry.kind === "USE") {
       leaveBalance -= days;
     } else {
       leaveBalance += days;
     }
   }
 
+  // Monthly overtime calculation
   let monthlyOvertimeMinutes = 0;
   for (const me of monthEntries) {
     monthlyOvertimeMinutes += calcDailyOvertime(me.workMinutes, STANDARD_DAILY_MINUTES);
@@ -133,7 +129,7 @@ export default async function DashboardPage() {
   const overtimePercentage = Math.round((monthlyOvertimeMinutes / MONTHLY_OVERTIME_LIMIT_MINUTES) * 100);
 
   const faceAuthEnabled = tenant?.faceAuthEnabled ?? false;
-  const faceRegistered = faceAuthEnabled ? faceDescCount > 0 : false;
+  const faceRegistered = faceAuthEnabled ? faceDescriptorCount > 0 : false;
 
   const isAdmin = role === "ADMIN";
 
@@ -193,11 +189,15 @@ export default async function DashboardPage() {
 
       <main className="page-container">
         {/* Admin link */}
-        {isAdmin && (
-          <nav style={{ marginBottom: 8 }}>
+        {(isAdmin || role === "APPROVER") && (
+          <nav style={{ marginBottom: 8, display: "flex", gap: 12, flexWrap: "wrap" }}>
             <Link href="/admin" style={{ fontWeight: 500 }}>
               管理画面 →
             </Link>
+            {role === "ADMIN" && <Link href="/admin/users">ユーザー管理</Link>}
+            {role === "ADMIN" && <Link href="/admin/departments">部署管理</Link>}
+            {role === "ADMIN" && <Link href="/admin/shifts">シフト管理</Link>}
+            {role === "ADMIN" && <Link href="/admin/audit-logs">監査ログ</Link>}
           </nav>
         )}
 
@@ -268,6 +268,9 @@ export default async function DashboardPage() {
               <Link href="/leave-requests">
                 <button className="btn-compact">申請一覧</button>
               </Link>
+              <Link href="/leave/balance">
+                <button className="btn-compact">休暇残高</button>
+              </Link>
             </div>
           </div>
         </section>
@@ -279,6 +282,23 @@ export default async function DashboardPage() {
             あなたの未処理申請: <span className="badge badge-pending">{myPendingCount} 件</span>
           </p>
         </section>
+
+        {/* Quick links */}
+        <section>
+          <h2 style={{ marginBottom: 12 }}>リンク</h2>
+          <nav style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <Link href="/daily-reports">日報</Link>
+            <Link href="/settings">設定</Link>
+          </nav>
+        </section>
+
+        {/* Face registration link */}
+        {tenant?.faceAuthEnabled && (
+          <section>
+            <h2 style={{ marginBottom: 8 }}>顔認証</h2>
+            <Link href="/dashboard/face-register">顔データを登録・管理 →</Link>
+          </section>
+        )}
       </main>
     </>
   );

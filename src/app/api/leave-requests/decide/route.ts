@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { Prisma } from "@/generated/prisma";
 import { auth } from "@/auth";
+import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/db";
 import { toSessionUser } from "@/lib/session";
 import { guardSuspended } from "@/lib/tenant-guard";
@@ -38,6 +39,11 @@ export async function POST(req: Request) {
   const request = await prisma.leaveRequest.findUnique({ where: { id: input.data.id } });
   if (!request || request.tenantId !== tenantId) return jsonError("Not found", 404);
   if (request.status !== "PENDING") return jsonError("Already decided", 409);
+
+  // Prevent self-approval
+  if (request.userId === approverUserId) {
+    return jsonError("Cannot approve your own leave request", 403);
+  }
 
   const decidedAt = new Date();
 
@@ -82,7 +88,7 @@ export async function POST(req: Request) {
       }),
     ]);
   } else if (input.data.decision === "APPROVED") {
-    // APPROVED but not PAID/HALF — no ledger deduction
+    // APPROVED but not PAID/HALF -- no ledger deduction
     await prisma.$transaction([
       prisma.leaveRequest.update({
         where: { id: request.id },
@@ -119,6 +125,17 @@ export async function POST(req: Request) {
       }),
     ]);
   }
+
+  // Also write via audit library
+  await writeAuditLog({
+    tenantId,
+    actorUserId: approverUserId,
+    action: `LEAVE_${input.data.decision}`,
+    entityType: "LeaveRequest",
+    entityId: request.id,
+    before: { status: request.status },
+    after: { status: input.data.decision },
+  });
 
   // Notify the requester
   const TYPE_LABELS: Record<string, string> = { PAID: "有給休暇", HALF: "半休", HOURLY: "時間休", ABSENCE: "欠勤" };

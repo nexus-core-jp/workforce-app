@@ -8,11 +8,12 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { rateLimit } from "@/lib/rate-limit";
+import { LineProvider } from "@/lib/line-provider";
 
 import type { Provider } from "next-auth/providers";
 
 const signInSchema = z.object({
-  tenant: z.string().min(1), // tenant slug
+  tenant: z.string().min(1),
   email: z.string().email(),
   password: z.string().min(8),
 });
@@ -142,6 +143,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.role = u.role as string;
         token.departmentId = (u.departmentId as string) ?? null;
         token.plan = u.plan as string;
+        token.trialEndsAt = (u.trialEndsAt as string) ?? null;
+      }
+      if (account?.provider === "line" && account.access_token) {
+        token.lineAccessToken = account.access_token;
       }
 
       if (account?.provider === "line" && user) {

@@ -38,6 +38,9 @@ model User {
   faceDescriptors FaceDescriptor[]
 
   notifications Notification[]
+  payrollConfigs PayrollConfig[]
+  monthlyPayrolls MonthlyPayroll[]
+
   departmentsApproving Department[] @relation("DepartmentApprover")
   attendanceCorrectionsApproved AttendanceCorrection[] @relation("AttendanceCorrectionApprover")
   leaveRequestsApproved LeaveRequest[] @relation("LeaveRequestApprover")
@@ -119,6 +122,9 @@ model Tenant {
   attendanceCorrections AttendanceCorrection[]
   notifications Notification[]
   passwordResetTokens PasswordResetToken[]
+  payrollConfigs PayrollConfig[]
+  monthlyPayrolls MonthlyPayroll[]
+  tenantHolidays TenantHoliday[]
   faceDescriptors FaceDescriptor[]
 
   @@index([name])
@@ -263,6 +269,8 @@ model LeaveRequest {
   userId         String
 
   type           LeaveType
+  halfType       HalfDayType?  // AM or PM (only when type=HALF)
+  hours          Float?        // hours taken (only when type=HOURLY)
   startAt        DateTime
   endAt          DateTime
   reason         String?
@@ -364,6 +372,120 @@ model Notification {
   @@index([tenantId, userId, createdAt])
 }
 
+// --- Payroll ---
+model PayrollConfig {
+  id           String   @id @default(cuid())
+  tenantId     String
+  userId       String
+
+  payType      PayType  @default(MONTHLY)
+  baseSalary   Int      @default(0)        // 月給 (円) or 基本日給
+  hourlyRate   Int      @default(0)        // 時給 (円)
+  commuteAllowance    Int @default(0)      // 通勤手当 (円/月)
+  housingAllowance    Int @default(0)      // 住宅手当 (円/月)
+  familyAllowance     Int @default(0)      // 家族手当 (円/月)
+  otherAllowance      Int @default(0)      // その他手当 (円/月)
+  otherAllowanceLabel String?              // その他手当の名称
+
+  scheduledWorkDays    Int @default(20)    // 所定労働日数/月
+  scheduledWorkMinutes Int @default(480)   // 所定労働時間/日 (分, default 8h)
+
+  overtimeRate         Decimal @default(1.25) @db.Decimal(4, 2)  // 残業割増率
+  lateNightRate        Decimal @default(1.50) @db.Decimal(4, 2)  // 深夜割増率
+  holidayRate          Decimal @default(1.35) @db.Decimal(4, 2)  // 休日割増率
+
+  bankName        String?   // 振込先銀行名
+  bankCode        String?   // 銀行コード (4桁)
+  branchName      String?   // 支店名
+  branchCode      String?   // 支店コード (3桁)
+  accountType     String?   // 普通/当座
+  accountNumber   String?   // 口座番号 (7桁)
+  accountHolder   String?   // 口座名義 (カナ)
+
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([tenantId, userId])
+  @@index([tenantId])
+}
+
+model MonthlyPayroll {
+  id           String   @id @default(cuid())
+  tenantId     String
+  userId       String
+  month        String   // "YYYY-MM"
+
+  // 労働時間内訳 (分)
+  totalWorkMinutes     Int @default(0)
+  scheduledMinutes     Int @default(0)   // 所定内労働時間
+  overtimeMinutes      Int @default(0)   // 時間外 (法定超)
+  lateNightMinutes     Int @default(0)   // 深夜 (22:00-05:00)
+  holidayMinutes       Int @default(0)   // 休日労働
+  workDays             Int @default(0)   // 出勤日数
+  absentDays           Int @default(0)   // 欠勤日数
+
+  // 給与計算結果 (円)
+  basePay              Int @default(0)   // 基本給
+  overtimePay          Int @default(0)   // 時間外手当
+  lateNightPay         Int @default(0)   // 深夜手当
+  holidayPay           Int @default(0)   // 休日手当
+  commuteAllowance     Int @default(0)   // 通勤手当
+  otherAllowances      Int @default(0)   // その他手当合計
+  grossPay             Int @default(0)   // 総支給額
+
+  // 控除 (将来拡張: 社保・税)
+  deductions           Int @default(0)   // 控除合計
+  netPay               Int @default(0)   // 差引支給額
+
+  status       PayrollStatus @default(DRAFT)
+  confirmedAt  DateTime?
+
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([tenantId, userId, month])
+  @@index([tenantId, month])
+}
+
+// --- Face authentication (顔認証) ---
+model FaceDescriptor {
+  id         String   @id @default(cuid())
+  tenantId   String
+  userId     String
+  descriptor String   @db.Text // JSON array of 128 floats (face-api.js descriptor)
+  label      String?  // optional label like "正面", "左向き"
+
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([tenantId, userId])
+}
+
+// --- Company custom holidays (会社休業日) ---
+model TenantHoliday {
+  id        String   @id @default(cuid())
+  tenantId  String
+  date      DateTime // date-only semantics (JST midnight)
+  name      String   // e.g. "年末休業", "創立記念日"
+  recurring Boolean  @default(false) // true = 毎年繰り返し (月日で判定)
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([tenantId, date])
+  @@index([tenantId])
+}
+
 model PasswordResetToken {
   id        String    @id @default(cuid())
   tenantId  String
@@ -404,10 +526,15 @@ enum ReportStatus {
 }
 
 enum LeaveType {
-  PAID
-  HALF
-  HOURLY
-  ABSENCE
+  PAID       // 全日有給
+  HALF       // 半日有給 (午前 or 午後)
+  HOURLY     // 時間単位有給
+  ABSENCE    // 欠勤
+}
+
+enum HalfDayType {
+  AM  // 午前休
+  PM  // 午後休
 }
 
 enum LeaveRequestStatus {
@@ -442,15 +569,13 @@ enum TenantPlan {
   SUSPENDED
 }
 
-model FaceDescriptor {
-  id          String   @id @default(cuid())
-  tenantId    String
-  userId      String
-  descriptor  Json     // 128-dimensional float array from face-api.js
-  createdAt   DateTime @default(now())
+enum PayType {
+  MONTHLY   // 月給制
+  HOURLY    // 時給制
+  DAILY     // 日給制
+}
 
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([tenantId, userId])
+enum PayrollStatus {
+  DRAFT      // 計算済み・未確定
+  CONFIRMED  // 管理者確定
 }

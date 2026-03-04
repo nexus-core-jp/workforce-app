@@ -42,7 +42,7 @@ async function main() {
     create: { name: "Demo", slug: "demo", plan: "TRIAL", trialEndsAt },
   });
 
-  await prisma.user.upsert({
+  const admin = await prisma.user.upsert({
     where: { tenantId_email: { tenantId: tenant.id, email: "admin@demo.local" } },
     update: { name: "Admin", role: UserRole.ADMIN, passwordHash, active: true },
     create: {

@@ -40,7 +40,8 @@ export function CorrectionForm({ date }: { date: string }) {
         router.push("/dashboard");
         router.refresh();
       } catch (e: unknown) {
-        setError(e instanceof Error ? e.message : "Failed");
+        const msg = e instanceof Error ? e.message : "予期しないエラーが発生しました";
+        setError(msg);
       }
     });
   };
@@ -94,18 +95,29 @@ export function CorrectionForm({ date }: { date: string }) {
           <textarea
             required
             rows={4}
-            style={{ width: "100%" }}
+            style={{ width: "100%", padding: "6px 8px", border: "1px solid #ccc", borderRadius: 4 }}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
+            placeholder="修正が必要な理由を入力してください"
+            aria-describedby="reason-count"
           />
         </label>
         <p style={{ margin: 0, fontSize: 13, opacity: 0.7 }}>
           変更したい項目のみ入力してください。空欄の項目は元の値が維持されます。
         </p>
-        <button disabled={isPending || reason.trim().length === 0} onClick={submit}>
-          申請する
+        <button
+          disabled={isPending || reason.trim().length === 0}
+          onClick={submit}
+          style={{ padding: "8px 16px", cursor: "pointer" }}
+          aria-busy={isPending}
+        >
+          {isPending ? "送信中..." : "申請する"}
         </button>
-        {error ? <p className="error-text" role="alert">エラー: {error}</p> : null}
+        {error && (
+          <p className="error-text" role="alert">
+            エラー: {error}
+          </p>
+        )}
       </div>
     </section>
   );

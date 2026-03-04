@@ -163,6 +163,31 @@ npm run dev
 ### 方法 1: Vercel + Neon (推奨)
 
 最も簡単な構成です。どちらも無料プランがあります。
+50人規模の勤怠管理なら無料枠で運用可能です。
+
+#### アーキテクチャ
+
+```
+[ブラウザ] ──→ [Vercel Edge Network]
+                    │
+            [Next.js App (サーバーレス関数)]
+                    │
+            [Neon WebSocket Adapter]
+                    │
+            [Neon PostgreSQL (サーバーレス)]
+```
+
+- **Vercel**: アクセスがないときはサーバーレス関数がスリープ → コスト0
+- **Neon**: アクセスがないときは DB がスケールダウン → コスト最小化
+- 勤怠アプリは朝・夕方のピーク以外はほぼアイドル → 無料枠で十分
+
+#### コスト目安
+
+| 規模 | Vercel | Neon | 月額合計 |
+|------|--------|------|----------|
+| 個人・検証 | Hobby（無料） | Free | **$0** |
+| ~50人 | Pro（$20） | Free | **$20** |
+| ~200人 | Pro（$20） | Launch（$19） | **$39** |
 
 #### Step 1: Neon でデータベースを作成
 
@@ -172,6 +197,8 @@ npm run dev
    ```
    postgresql://user:pass@ep-xxx.region.aws.neon.tech/neondb?sslmode=require
    ```
+
+> **注意**: `channel_binding=require` が含まれている場合は削除してください。Prisma との互換性の問題があります。
 
 #### Step 2: Vercel にデプロイ
 
@@ -190,7 +217,14 @@ npm run dev
 
 #### Step 3: DB マイグレーション & シード
 
-デプロイ後、ローカルから実行します。
+セットアップスクリプトを使うと、マイグレーション + デモデータ投入が一発で完了します。
+
+```bash
+# ワンステップセットアップ
+./scripts/setup-neon.sh "postgresql://neondb_owner:PASSWORD@ep-xxx-pooler.region.aws.neon.tech/neondb?sslmode=require"
+```
+
+または手動で実行:
 
 ```bash
 # .env の DATABASE_URL を Neon の接続文字列に設定した状態で:
@@ -200,7 +234,17 @@ npm run db:seed
 
 これで本番環境にテーブルとデモデータが作成されます。
 
-#### Step 4 (任意): カスタムドメイン
+#### Step 4: デプロイ後の確認
+
+```bash
+# ヘルスチェック
+curl https://your-app.vercel.app/api/health
+
+# 期待されるレスポンス
+# {"status":"ok","timestamp":"...","database":"connected"}
+```
+
+#### Step 5 (任意): カスタムドメイン
 
 1. Vercel ダッシュボード → Settings → Domains
 2. ドメインを追加し、DNS レコードを設定
@@ -240,6 +284,11 @@ Node.js 20+ と PostgreSQL が必要です。
 | `STRIPE_SECRET_KEY` | 任意 | Stripe シークレットキー | `sk_live_xxxx` |
 | `STRIPE_WEBHOOK_SECRET` | 任意 | Stripe Webhook 署名シークレット | `whsec_xxxx` |
 | `STRIPE_PRICE_ID` | 任意 | Stripe サブスクリプション価格 ID | `price_xxxx` |
+| `LINE_CLIENT_ID` | 任意 | LINE Login クライアント ID | |
+| `LINE_CLIENT_SECRET` | 任意 | LINE Login クライアントシークレット | |
+| `LINE_CHANNEL_SECRET` | 任意 | LINE Bot チャネルシークレット | |
+| `LINE_CHANNEL_ACCESS_TOKEN` | 任意 | LINE Bot チャネルアクセストークン | |
+| `LINE_NOTIFY_TOKEN` | 任意 | LINE Notify トークン | |
 
 > `STRIPE_*` を設定しない場合、課金ボタンは「Stripe is not configured」エラーを返します。課金なしでも勤怠機能は使えます。
 
@@ -461,6 +510,13 @@ SA は `__platform` テナントの `SUPER_ADMIN` ロールのユーザーです
 | POST | `/api/admin/members` | メンバー追加 | ADMIN |
 | PATCH | `/api/admin/members` | 退社・復帰・ロール変更 | ADMIN |
 
+### ユーザー
+
+| メソッド | エンドポイント | 説明 | 権限 |
+|---------|--------------|------|------|
+| GET/POST | `/api/users` | ユーザー一覧/作成 | ログイン |
+| POST | `/api/users/change-password` | パスワード変更 | ログイン |
+
 ### 課金 (Stripe)
 
 | メソッド | エンドポイント | 説明 | 権限 |
@@ -474,6 +530,12 @@ SA は `__platform` テナントの `SUPER_ADMIN` ロールのユーザーです
 | メソッド | エンドポイント | 説明 | 権限 |
 |---------|--------------|------|------|
 | POST | `/api/super-admin/tenants/[id]/plan` | プラン変更 | SUPER_ADMIN |
+
+### ヘルスチェック
+
+| メソッド | エンドポイント | 説明 | 権限 |
+|---------|--------------|------|------|
+| GET | `/api/health` | ヘルスチェック | 不要 |
 
 > 全ての data-mutating API は SUSPENDED テナントからの呼び出しを `403` で拒否します。
 
@@ -563,6 +625,7 @@ workforce-app/
 | `npm run build` | プロダクションビルド |
 | `npm start` | プロダクションサーバー (port 3002) |
 | `npm run lint` | ESLint |
+| `npm run typecheck` | 型チェック |
 | `npm test` | Vitest テスト実行 |
 | `npm run test:watch` | テスト (watch モード) |
 | `npm run prisma:generate` | Prisma クライアント生成 |

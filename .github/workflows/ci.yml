@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, "claude/**"]
   pull_request:
     branches: [main]
 
@@ -24,11 +24,11 @@ jobs:
       - name: Generate Prisma client
         run: npx prisma generate
 
+      - name: Type check
+        run: npm run typecheck
+
       - name: Lint
         run: npm run lint
-
-      - name: Type check
-        run: npx tsc --noEmit
 
       - name: Unit tests
         run: npm test

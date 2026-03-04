@@ -42,5 +42,7 @@ function validateEnv(): Env {
   return result.data;
 }
 
+export { validateEnv };
+
 /** Validated environment — accessing this guarantees required vars exist. */
 export const env = validateEnv();

@@ -1,6 +1,8 @@
 "use client";
 
-export default function GlobalError({
+import Link from "next/link";
+
+export default function ErrorPage({
   error,
   reset,
 }: {
@@ -29,9 +31,14 @@ export default function GlobalError({
         >
           {error.message || "予期しないエラーが発生しました。"}
         </p>
-        <button data-variant="primary" onClick={reset}>
-          再試行
-        </button>
+        <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+          <button onClick={reset} data-variant="primary">
+            再試行
+          </button>
+          <Link href="/dashboard">
+            <button>ダッシュボードへ</button>
+          </Link>
+        </div>
       </div>
     </main>
   );

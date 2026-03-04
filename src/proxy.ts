@@ -19,6 +19,16 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(new URL("/suspended", req.url));
   }
 
+  // TRIAL with expired trial → redirect to /suspended
+  if (plan === "TRIAL") {
+    const trialEndsAt = token.trialEndsAt as string | null;
+    if (trialEndsAt && new Date(trialEndsAt).getTime() < Date.now()) {
+      if (req.nextUrl.pathname !== "/suspended") {
+        return NextResponse.redirect(new URL("/suspended", req.url));
+      }
+    }
+  }
+
   return NextResponse.next();
 }
 

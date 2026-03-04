@@ -98,7 +98,7 @@ export default async function AdminAuditLogsPage({ searchParams }: Props) {
 
       <main className="page-container">
         <nav style={{ display: "flex", gap: 12, marginBottom: 8 }}>
-          <Link href="/admin">← 管理画面</Link>
+          <Link href="/admin">&larr; 管理画面</Link>
         </nav>
 
         <h2 style={{ marginBottom: 16 }}>監査ログ</h2>
@@ -150,7 +150,7 @@ export default async function AdminAuditLogsPage({ searchParams }: Props) {
           <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "center" }}>
             {page > 1 && (
               <Link href={`?${new URLSearchParams({ ...params, page: String(page - 1) }).toString()}`}>
-                ← 前へ
+                &larr; 前へ
               </Link>
             )}
             <span style={{ fontSize: 14 }}>
@@ -158,7 +158,7 @@ export default async function AdminAuditLogsPage({ searchParams }: Props) {
             </span>
             {page < totalPages && (
               <Link href={`?${new URLSearchParams({ ...params, page: String(page + 1) }).toString()}`}>
-                次へ →
+                次へ &rarr;
               </Link>
             )}
           </div>

@@ -34,6 +34,20 @@ describe("startOfJstDay", () => {
     expect(result.getUTCMinutes()).toBe(0);
     expect(result.getUTCSeconds()).toBe(0);
   });
+
+  it("handles dates near midnight JST", () => {
+    // 2026-02-16 00:01:00 JST = 2026-02-15 15:01:00 UTC
+    const date = new Date("2026-02-15T15:01:00Z");
+    const result = startOfJstDay(date);
+    expect(result.toISOString()).toBe("2026-02-15T15:00:00.000Z");
+  });
+
+  it("handles dates just before midnight JST", () => {
+    // 2026-02-15 23:59:00 JST = 2026-02-15 14:59:00 UTC
+    const date = new Date("2026-02-15T14:59:00Z");
+    const result = startOfJstDay(date);
+    expect(result.toISOString()).toBe("2026-02-14T15:00:00.000Z");
+  });
 });
 
 describe("addJstDays", () => {
@@ -76,5 +90,11 @@ describe("toCloseMonth", () => {
     const input = new Date("2026-02-28T15:01:00Z");
     const result = toCloseMonth(input);
     expect(result).toBe("2026-03");
+  });
+
+  it("handles month boundary correctly", () => {
+    // 2026-02-01 00:30:00 JST = 2026-01-31 15:30:00 UTC
+    const date = new Date("2026-01-31T15:30:00Z");
+    expect(toCloseMonth(date)).toBe("2026-02");
   });
 });

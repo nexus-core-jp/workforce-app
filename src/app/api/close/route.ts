@@ -3,14 +3,12 @@ import { z } from "zod";
 
 import { Prisma } from "@/generated/prisma";
 import { auth } from "@/auth";
+import { jsonError } from "@/lib/api";
+import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/db";
 import { toSessionUser } from "@/lib/session";
 import { guardSuspended } from "@/lib/tenant-guard";
 import { toCloseMonth } from "@/lib/jst";
-
-function jsonError(message: string, status = 400) {
-  return NextResponse.json({ ok: false, error: message }, { status });
-}
 
 const schema = z.object({
   month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
@@ -36,13 +34,19 @@ export async function POST(req: Request) {
 
   const month = input.data.month ?? toCloseMonth(new Date());
 
-  const close = await prisma.close.upsert({
-    where: { tenantId_month_scope_departmentId: { tenantId, month, scope: "COMPANY", departmentId: "" } },
-    create: { tenantId, month, scope: "COMPANY", departmentId: "", closedByUserId },
-    update: {},
-  });
+  let close;
+  try {
+    close = await prisma.close.upsert({
+      where: { tenantId_month_scope_departmentId: { tenantId, month, scope: "COMPANY", departmentId: "" } },
+      create: { tenantId, month, scope: "COMPANY", departmentId: "", closedByUserId },
+      update: {},
+    });
+  } catch (err) {
+    console.error("[close] DB error:", err);
+    return jsonError("月次締めの保存に失敗しました", 500);
+  }
 
-  // Audit log
+  // Audit log (direct DB write)
   await prisma.auditLog.create({
     data: {
       tenantId,
@@ -53,6 +57,16 @@ export async function POST(req: Request) {
       beforeJson: Prisma.JsonNull,
       afterJson: { month, scope: "COMPANY" },
     },
+  });
+
+  // Audit log (via audit library)
+  await writeAuditLog({
+    tenantId,
+    actorUserId: closedByUserId,
+    action: "MONTH_CLOSED",
+    entityType: "Close",
+    entityId: close.id,
+    after: { month, scope: "COMPANY" },
   });
 
   return NextResponse.json({ ok: true, close });
