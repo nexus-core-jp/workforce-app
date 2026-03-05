@@ -3,7 +3,6 @@ import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
-  output: "standalone",
   turbopack: {
     root: import.meta.dirname,
   },

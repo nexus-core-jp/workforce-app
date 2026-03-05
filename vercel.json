@@ -1,4 +1,5 @@
 {
+  "buildCommand": "bash scripts/setup-face-models.sh && next build",
   "functions": {
     "src/app/api/admin/export/route.ts": {
       "maxDuration": 120
