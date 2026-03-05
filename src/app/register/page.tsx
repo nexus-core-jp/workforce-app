@@ -183,7 +183,7 @@ function RegisterForm() {
             handleSubmit();
           }}
         >
-          <fieldset disabled={loading} style={{ display: "contents", border: "none", padding: 0, margin: 0 }}>
+          <div style={{ display: "grid", gap: 16 }}>
             <label style={{ display: "grid", gap: 6 }}>
               <span>会社名</span>
               <input
@@ -255,10 +255,12 @@ function RegisterForm() {
               <div style={{ display: "flex", gap: 8 }}>
                 <button
                   type="button"
+                  className="btn-compact"
                   onClick={() => setAuthMode("password")}
                   style={{
                     flex: 1,
                     padding: "8px 12px",
+                    minHeight: 44,
                     borderRadius: 8,
                     border: `2px solid ${authMode === "password" ? "var(--color-primary)" : "var(--color-border)"}`,
                     background: authMode === "password" ? "var(--color-primary-light, rgba(59,130,246,0.1))" : "transparent",
@@ -271,10 +273,12 @@ function RegisterForm() {
                 </button>
                 <button
                   type="button"
+                  className="btn-compact"
                   onClick={() => setAuthMode("line")}
                   style={{
                     flex: 1,
                     padding: "8px 12px",
+                    minHeight: 44,
                     borderRadius: 8,
                     border: `2px solid ${authMode === "line" ? "#06C755" : "var(--color-border)"}`,
                     background: authMode === "line" ? "rgba(6,199,85,0.1)" : "transparent",
@@ -360,8 +364,6 @@ function RegisterForm() {
                   padding: "12px 16px",
                   fontSize: 16,
                   fontWeight: 600,
-                  cursor: !canSubmit || loading ? "not-allowed" : "pointer",
-                  opacity: !canSubmit || loading ? 0.6 : 1,
                 } : {}),
               }}
             >
@@ -372,7 +374,7 @@ function RegisterForm() {
                   : "会社を登録"
               }
             </button>
-          </fieldset>
+          </div>
 
           {error ? <p className="error-text" role="alert">{error}</p> : null}
         </form>
