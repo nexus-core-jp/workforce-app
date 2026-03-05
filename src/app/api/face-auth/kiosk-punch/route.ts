@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { jsonError } from "@/lib/api";
 import { prisma } from "@/lib/db";
+import { isFaceAuthAvailable } from "@/lib/face-auth-config";
 import { isMonthClosed } from "@/lib/close";
 import { diffMinutes, startOfJstDay } from "@/lib/time";
 
@@ -33,6 +34,8 @@ function computeWorkMinutes(entry: {
  * Rate-limited by IP in production.
  */
 export async function POST(req: Request) {
+  if (!isFaceAuthAvailable()) return jsonError("Face auth is not available in this deployment", 403);
+
   const raw = await req.json().catch(() => null);
   const input = schema.safeParse(raw);
   if (!input.success) return jsonError(input.error.issues.map((e) => e.message).join(", "));

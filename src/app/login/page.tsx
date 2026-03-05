@@ -200,6 +200,24 @@ function LoginForm() {
           LINEでログイン
         </button>
 
+        {/* Demo account info */}
+        <div style={{
+          marginTop: 20,
+          padding: "14px 16px",
+          background: "var(--color-bg)",
+          border: "1px solid var(--color-border)",
+          borderRadius: 8,
+        }}>
+          <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: "var(--color-text-secondary)" }}>
+            デモアカウント（会社ID: demo）
+          </p>
+          <div style={{ display: "grid", gap: 4, fontSize: 12, fontFamily: "monospace", color: "var(--color-text-secondary)" }}>
+            <div>管理者: admin@demo.local / password123</div>
+            <div>承認者: suzuki@demo.local / password123</div>
+            <div>従業員: tanaka@demo.local / password123</div>
+          </div>
+        </div>
+
         <p style={{ marginTop: 16, fontSize: 14, textAlign: "center" }}>
           <Link href="/forgot-password">パスワードをお忘れですか？</Link>
         </p>
