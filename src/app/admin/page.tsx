@@ -15,6 +15,7 @@ import { AdminLeaveRequests } from "./AdminLeaveRequests";
 import { AttendanceStatus } from "./AttendanceStatus";
 import { ExportPanel } from "./ExportPanel";
 import { FaceAuthToggle } from "./FaceAuthToggle";
+import { isFaceAuthAvailable } from "@/lib/face-auth-config";
 import { LeaveBalanceReport } from "./LeaveBalanceReport";
 import { MobileNav } from "./MobileNav";
 import { OvertimePanel } from "./OvertimePanel";
@@ -362,6 +363,7 @@ export default async function AdminPage() {
         {/* Face auth toggle (ADMIN only) */}
         {role === "ADMIN" && tenant && (
           <FaceAuthToggle
+            available={isFaceAuthAvailable()}
             enabled={tenant.faceAuthEnabled}
             kioskUrl={`/kiosk/${tenant.slug}`}
             registeredUsers={faceAuthRegisteredUsers}

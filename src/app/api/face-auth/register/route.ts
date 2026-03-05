@@ -4,6 +4,7 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { jsonError } from "@/lib/api";
 import { prisma } from "@/lib/db";
+import { isFaceAuthAvailable } from "@/lib/face-auth-config";
 import {
   isValidDescriptor,
   MAX_DESCRIPTORS_PER_USER,
@@ -19,6 +20,8 @@ const schema = z.object({
 
 /** POST: Register a face descriptor for the current user */
 export async function POST(req: Request) {
+  if (!isFaceAuthAvailable()) return jsonError("Face auth is not available in this deployment", 403);
+
   const session = await auth();
   if (!session?.user) return jsonError("Unauthorized", 401);
 
@@ -89,6 +92,8 @@ export async function GET() {
 
 /** DELETE: Remove a face descriptor */
 export async function DELETE(req: Request) {
+  if (!isFaceAuthAvailable()) return jsonError("Face auth is not available in this deployment", 403);
+
   const session = await auth();
   if (!session?.user) return jsonError("Unauthorized", 401);
 

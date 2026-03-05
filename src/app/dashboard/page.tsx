@@ -9,6 +9,7 @@ import { toSessionUser } from "@/lib/session";
 import { addJstDays, formatLocal, startOfJstDay } from "@/lib/time";
 import { calcDailyOvertime, STANDARD_DAILY_MINUTES, MONTHLY_OVERTIME_LIMIT_MINUTES } from "@/lib/overtime";
 
+import { isFaceAuthAvailable } from "@/lib/face-auth-config";
 import { Logo } from "../Logo";
 import { DailyReportPanel } from "./DailyReportPanel";
 import { History } from "./History";
@@ -128,7 +129,8 @@ export default async function DashboardPage() {
   }
   const overtimePercentage = Math.round((monthlyOvertimeMinutes / MONTHLY_OVERTIME_LIMIT_MINUTES) * 100);
 
-  const faceAuthEnabled = tenant?.faceAuthEnabled ?? false;
+  const faceAvailable = isFaceAuthAvailable();
+  const faceAuthEnabled = faceAvailable && (tenant?.faceAuthEnabled ?? false);
   const faceRegistered = faceAuthEnabled ? faceDescriptorCount > 0 : false;
 
   const isAdmin = role === "ADMIN";
@@ -293,7 +295,7 @@ export default async function DashboardPage() {
         </section>
 
         {/* Face registration link */}
-        {tenant?.faceAuthEnabled && (
+        {faceAuthEnabled && (
           <section>
             <h2 style={{ marginBottom: 8 }}>顔認証</h2>
             <Link href="/dashboard/face-register">顔データを登録・管理 →</Link>

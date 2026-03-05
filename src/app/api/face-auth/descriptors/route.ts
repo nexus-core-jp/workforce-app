@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { jsonError } from "@/lib/api";
 import { prisma } from "@/lib/db";
+import { isFaceAuthAvailable } from "@/lib/face-auth-config";
 
 /**
  * GET: Fetch all face descriptors for a tenant (used by kiosk mode).
@@ -9,6 +10,8 @@ import { prisma } from "@/lib/db";
  * No auth required (kiosk runs without login) — descriptors are float arrays, not secrets.
  */
 export async function GET(req: Request) {
+  if (!isFaceAuthAvailable()) return jsonError("Face auth is not available in this deployment", 403);
+
   const url = new URL(req.url);
   const slug = url.searchParams.get("tenantSlug");
   if (!slug) return jsonError("tenantSlug is required");

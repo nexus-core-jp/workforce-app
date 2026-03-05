@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-export function FaceAuthToggle({ enabled, kioskUrl, registeredUsers, totalUsers }: { enabled: boolean; kioskUrl: string; registeredUsers: number; totalUsers: number }) {
+export function FaceAuthToggle({ enabled, kioskUrl, registeredUsers, totalUsers, available }: { enabled: boolean; kioskUrl: string; registeredUsers: number; totalUsers: number; available: boolean }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,22 +36,37 @@ export function FaceAuthToggle({ enabled, kioskUrl, registeredUsers, totalUsers 
         有効にすると、従業員が顔データを登録でき、キオスク端末（タブレット）で顔をかざすだけで出退勤を打刻できます。
       </p>
 
+      {!available && (
+        <div style={{
+          padding: "8px 12px",
+          marginBottom: 12,
+          background: "var(--color-surface)",
+          border: "1px solid var(--color-border)",
+          borderRadius: 8,
+          fontSize: 13,
+          color: "var(--color-text-secondary)",
+          opacity: 0.8,
+        }}>
+          この機能を利用するには、環境変数 <code>NEXT_PUBLIC_FACE_AUTH_AVAILABLE=true</code> の設定と顔認証モデルのセットアップが必要です。
+        </div>
+      )}
+
       <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
         <button
           type="button"
           onClick={handleToggle}
-          disabled={loading}
+          disabled={loading || !available}
           data-variant={isEnabled ? undefined : "primary"}
-          style={{ padding: "6px 16px" }}
+          style={{ padding: "6px 16px", opacity: available ? 1 : 0.5 }}
         >
           {loading ? "更新中..." : isEnabled ? "無効にする" : "有効にする"}
         </button>
-        <span className={`badge ${isEnabled ? "badge-approved" : "badge-rejected"}`}>
-          {isEnabled ? "有効" : "無効"}
+        <span className={`badge ${isEnabled && available ? "badge-approved" : "badge-rejected"}`}>
+          {!available ? "未設定" : isEnabled ? "有効" : "無効"}
         </span>
       </div>
 
-      {isEnabled && (
+      {isEnabled && available && (
         <div style={{
           padding: 12,
           background: "var(--color-surface)",
