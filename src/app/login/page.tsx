@@ -111,10 +111,10 @@ function LoginForm() {
             }
           }}
         >
-          <fieldset disabled={loading} style={{ display: "contents", border: "none", padding: 0, margin: 0 }}>
+          <div style={{ display: "grid", gap: 16 }}>
             <label style={{ display: "grid", gap: 6 }}>
               <span>会社ID</span>
-              <input value={tenant} onChange={(e) => setTenant(e.target.value)} required autoComplete="organization" placeholder="例: demo" />
+              <input value={tenant} onChange={(e) => setTenant(e.target.value)} required disabled={loading} autoComplete="organization" placeholder="例: demo" />
             </label>
 
             <label style={{ display: "grid", gap: 6 }}>
@@ -124,6 +124,7 @@ function LoginForm() {
                 onChange={(e) => setEmail(e.target.value)}
                 type="email"
                 required
+                disabled={loading}
                 autoComplete="email"
                 placeholder="you@example.com"
               />
@@ -136,6 +137,7 @@ function LoginForm() {
                 onChange={(e) => setPassword(e.target.value)}
                 type="password"
                 required
+                disabled={loading}
                 autoComplete="current-password"
               />
             </label>
@@ -161,7 +163,7 @@ function LoginForm() {
             <button type="submit" data-variant="primary" disabled={loading} style={{ marginTop: 8 }}>
               {loading ? "ログイン中..." : needsTotp ? "認証コードを送信" : "ログイン"}
             </button>
-          </fieldset>
+          </div>
 
           {error ? <p className="error-text" role="alert">{error}</p> : null}
         </form>
@@ -193,8 +195,6 @@ function LoginForm() {
             padding: "12px 16px",
             fontSize: 16,
             fontWeight: 600,
-            cursor: loading ? "not-allowed" : "pointer",
-            opacity: loading ? 0.6 : 1,
           }}
         >
           LINEでログイン

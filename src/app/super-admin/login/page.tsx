@@ -71,7 +71,7 @@ export default function SuperAdminLoginPage() {
             }
           }}
         >
-          <fieldset disabled={loading} style={{ display: "contents", border: "none", padding: 0, margin: 0 }}>
+          <div style={{ display: "grid", gap: 16 }}>
             <label style={{ display: "grid", gap: 6 }}>
               <span>メールアドレス</span>
               <input
@@ -79,6 +79,7 @@ export default function SuperAdminLoginPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 type="email"
                 required
+                disabled={loading}
                 autoComplete="email"
               />
             </label>
@@ -90,6 +91,7 @@ export default function SuperAdminLoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 type="password"
                 required
+                disabled={loading}
                 autoComplete="current-password"
               />
             </label>
@@ -97,7 +99,7 @@ export default function SuperAdminLoginPage() {
             <button type="submit" data-variant="primary" disabled={loading} style={{ marginTop: 8 }}>
               {loading ? "ログイン中..." : "ログイン"}
             </button>
-          </fieldset>
+          </div>
 
           {error ? <p className="error-text" role="alert">{error}</p> : null}
         </form>
