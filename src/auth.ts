@@ -129,6 +129,7 @@ if (process.env.LINE_CHANNEL_ID && process.env.LINE_CHANNEL_SECRET) {
 export const { handlers, auth, signIn, signOut } = NextAuth({
   // PrismaAdapter is removed: Credentials provider + JWT sessions don't need
   // a database adapter. We handle user lookup directly in authorize().
+  trustHost: true,
   session: {
     strategy: "jwt",
     maxAge: 24 * 60 * 60, // 24 hours
@@ -140,7 +141,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         : "next-auth.session-token",
       options: {
         httpOnly: true,
-        sameSite: "strict",
+        sameSite: "lax",
         path: "/",
         secure: isProduction,
       },
