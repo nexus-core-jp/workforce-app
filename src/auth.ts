@@ -52,9 +52,15 @@ const providers: Provider[] = [
         where: { tenantId_email: { tenantId: dbTenant.id, email } },
       });
       if (!user?.active) return null;
-      if (!user.passwordHash) return null;
 
-      const ok = await bcrypt.compare(password, user.passwordHash);
+      // Demo login via server-side token (AUTH_SECRET as internal token)
+      const isDemoToken = tenant === "demo" && password === `__demo:${process.env.AUTH_SECRET}`;
+
+      if (!isDemoToken) {
+        if (!user.passwordHash) return null;
+      }
+
+      const ok = isDemoToken || (user.passwordHash && await bcrypt.compare(password, user.passwordHash));
       if (!ok) {
         // Audit: login failed
         prisma.auditLog.create({
