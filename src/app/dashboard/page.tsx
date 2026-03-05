@@ -3,11 +3,12 @@ import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { logoutWithAudit } from "@/lib/logout-action";
-import { HISTORY_DAYS, LOCALE, DATE_LOCALE, TIMEZONE, PENDING_CORRECTIONS_LIMIT } from "@/lib/constants";
+import { HISTORY_DAYS, LOCALE, DATE_LOCALE, TIMEZONE } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { toSessionUser } from "@/lib/session";
 import { addJstDays, formatLocal, startOfJstDay } from "@/lib/time";
 import { calcDailyOvertime, STANDARD_DAILY_MINUTES, MONTHLY_OVERTIME_LIMIT_MINUTES } from "@/lib/overtime";
+import { isFaceAuthAvailable } from "@/lib/face-auth-config";
 
 import { Logo } from "../Logo";
 import { DailyReportPanel } from "./DailyReportPanel";
@@ -128,7 +129,7 @@ export default async function DashboardPage() {
   }
   const overtimePercentage = Math.round((monthlyOvertimeMinutes / MONTHLY_OVERTIME_LIMIT_MINUTES) * 100);
 
-  const faceAuthEnabled = tenant?.faceAuthEnabled ?? false;
+  const faceAuthEnabled = isFaceAuthAvailable() && (tenant?.faceAuthEnabled ?? false);
   const faceRegistered = faceAuthEnabled ? faceDescriptorCount > 0 : false;
 
   const isAdmin = role === "ADMIN";
@@ -293,7 +294,7 @@ export default async function DashboardPage() {
         </section>
 
         {/* Face registration link */}
-        {tenant?.faceAuthEnabled && (
+        {faceAuthEnabled && (
           <section>
             <h2 style={{ marginBottom: 8 }}>顔認証</h2>
             <Link href="/dashboard/face-register">顔データを登録・管理 →</Link>

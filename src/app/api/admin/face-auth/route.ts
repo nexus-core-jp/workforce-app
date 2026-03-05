@@ -4,6 +4,7 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { jsonError } from "@/lib/api";
 import { prisma } from "@/lib/db";
+import { isFaceAuthAvailable } from "@/lib/face-auth-config";
 import { toSessionUser } from "@/lib/session";
 import { guardSuspended } from "@/lib/tenant-guard";
 
@@ -51,6 +52,8 @@ export async function GET() {
 
 /** PATCH: Toggle face auth for the tenant */
 export async function PATCH(req: Request) {
+  if (!isFaceAuthAvailable()) return jsonError("Face auth is not available in this deployment", 403);
+
   const session = await auth();
   if (!session?.user) return jsonError("Unauthorized", 401);
 

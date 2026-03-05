@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
+import { isFaceAuthAvailable } from "@/lib/face-auth-config";
 import { toSessionUser } from "@/lib/session";
 
 function jsonError(message: string, status = 400) {
@@ -39,7 +40,8 @@ export async function GET() {
 
   return NextResponse.json({
     ok: true,
-    faceAuthEnabled: tenant?.faceAuthEnabled ?? false,
+    available: isFaceAuthAvailable(),
+    faceAuthEnabled: isFaceAuthAvailable() && (tenant?.faceAuthEnabled ?? false),
     registered: descriptors.length > 0,
     count: descriptors.length,
     descriptors: descriptors.map((d) => ({
