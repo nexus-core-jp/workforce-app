@@ -26,8 +26,6 @@ const signInSchema = z.object({
   totpCode: z.string().optional(), // 6-digit TOTP code (required if 2FA enabled)
 });
 
-const isProduction = process.env.NODE_ENV === "production";
-
 // Build providers list — LINE is only added when env vars are configured
 const providers: Provider[] = [
   Credentials({
@@ -133,19 +131,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   session: {
     strategy: "jwt",
     maxAge: 24 * 60 * 60, // 24 hours
-  },
-  cookies: {
-    sessionToken: {
-      name: isProduction
-        ? "__Secure-next-auth.session-token"
-        : "next-auth.session-token",
-      options: {
-        httpOnly: true,
-        sameSite: "lax",
-        path: "/",
-        secure: isProduction,
-      },
-    },
   },
   providers,
   pages: {
