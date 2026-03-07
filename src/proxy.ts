@@ -13,7 +13,8 @@ const protectedPrefixes = [
 ];
 
 export async function proxy(req: NextRequest) {
-  const token = await getToken({ req, secret: process.env.AUTH_SECRET });
+  const secureCookie = req.nextUrl.protocol === "https:";
+  const token = await getToken({ req, secret: process.env.AUTH_SECRET, secureCookie });
   const { pathname } = req.nextUrl;
 
   // Unauthenticated users accessing protected routes → redirect to login
