@@ -101,8 +101,9 @@ function LoginForm() {
                   setError("会社ID（会社登録時の英数字ID）、メールアドレス、またはパスワードが正しくありません");
                 }
               } else {
-                router.push("/dashboard");
-                router.refresh();
+                // Full page navigation ensures the new session cookie is picked up
+                window.location.href = "/dashboard";
+                return; // prevent finally from resetting loading state
               }
             } catch {
               setError("ネットワークエラーが発生しました。接続を確認してください。");
