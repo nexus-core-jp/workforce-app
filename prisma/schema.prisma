@@ -50,6 +50,7 @@ model User {
   auditLogsAsActor AuditLog[] @relation("AuditLogActor")
   passwordResetTokens PasswordResetToken[]
   passwordHistory PasswordHistory[]
+  invoicesConfirmed Invoice[] @relation("InvoiceConfirmedBy")
 
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -109,6 +110,9 @@ model Tenant {
   trialEndsAt           DateTime?
   stripeCustomerId      String?    @unique
   stripeSubscriptionId  String?
+  paymentMethod         PaymentMethod @default(NONE)
+  payjpCustomerId       String?    @unique
+  payjpSubscriptionId   String?
   faceAuthEnabled       Boolean    @default(false)
   createdAt             DateTime   @default(now())
   updatedAt             DateTime   @updatedAt
@@ -130,6 +134,7 @@ model Tenant {
   monthlyPayrolls MonthlyPayroll[]
   tenantHolidays TenantHoliday[]
   faceDescriptors FaceDescriptor[]
+  invoices Invoice[]
 
   @@index([name])
 }
@@ -492,6 +497,29 @@ model TenantHoliday {
   @@index([tenantId])
 }
 
+model Invoice {
+  id              String        @id @default(cuid())
+  tenantId        String
+  amount          Int           // 請求金額（円）
+  currency        String        @default("jpy")
+  status          InvoiceStatus @default(PENDING)
+  periodStart     DateTime      // 請求対象期間開始
+  periodEnd       DateTime      // 請求対象期間終了
+  dueDate         DateTime      // 支払期限
+  paidAt          DateTime?     // 入金確認日
+  confirmedByUserId String?     // 入金確認者（SUPER_ADMIN）
+  note            String?       // 備考
+
+  tenant          Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  confirmedBy     User?         @relation("InvoiceConfirmedBy", fields: [confirmedByUserId], references: [id])
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([tenantId, status])
+  @@index([tenantId, createdAt])
+}
+
 model PasswordResetToken {
   id        String    @id @default(cuid())
   tenantId  String
@@ -510,9 +538,21 @@ model PasswordResetToken {
 
 enum UserRole {
   EMPLOYEE
-  APPROVER
   ADMIN
   SUPER_ADMIN
+}
+
+enum PaymentMethod {
+  STRIPE
+  PAYJP
+  BANK_TRANSFER
+  NONE
+}
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+  CANCELLED
 }
 
 enum TimeEntryStatus {

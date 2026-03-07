@@ -10,10 +10,9 @@ interface Props {
   canBreakStart: boolean;
   canBreakEnd: boolean;
   canClockOut: boolean;
-  isAdminOrApprover: boolean;
+  isAdmin: boolean;
   pendingCount: number;
   pendingForApproval: Array<{ id: string; userLabel: string; dateLabel: string; reason: string }>;
-  isAdmin: boolean;
   month: string;
   isClosed: boolean;
 }
@@ -32,7 +31,7 @@ export function DashboardClient(props: Props) {
       />
 
       <CorrectionsPanel
-        isAdminOrApprover={props.isAdminOrApprover}
+        isAdmin={props.isAdmin}
         pendingCount={props.pendingCount}
         pendingForApproval={props.pendingForApproval}
         onToast={show}

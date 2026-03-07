@@ -9,7 +9,7 @@ export function UserCreateForm() {
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"EMPLOYEE" | "APPROVER" | "ADMIN">("EMPLOYEE");
+  const [role, setRole] = useState<"EMPLOYEE" | "ADMIN">("EMPLOYEE");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -66,7 +66,6 @@ export function UserCreateForm() {
           ロール
           <select value={role} onChange={(e) => setRole(e.target.value as typeof role)} style={inputStyle}>
             <option value="EMPLOYEE">EMPLOYEE</option>
-            <option value="APPROVER">APPROVER</option>
             <option value="ADMIN">ADMIN</option>
           </select>
         </label>

@@ -13,10 +13,10 @@ export default async function LeavePage() {
   if (!session) redirect("/login");
 
   const { id: userId, tenantId, role } = session.user;
-  const isAdminOrApprover = role === "ADMIN" || role === "APPROVER";
+  const isAdmin = role === "ADMIN";
 
   const requests = await prisma.leaveRequest.findMany({
-    where: isAdminOrApprover ? { tenantId } : { tenantId, userId },
+    where: isAdmin ? { tenantId } : { tenantId, userId },
     orderBy: { createdAt: "desc" },
     take: 50,
     include: { user: { select: { name: true, email: true } } },
@@ -29,7 +29,7 @@ export default async function LeavePage() {
       <LeaveRequestForm />
 
       <section style={{ marginTop: 24 }}>
-        <h2>{isAdminOrApprover ? "全申請一覧" : "あなたの申請一覧"}</h2>
+        <h2>{isAdmin ? "全申請一覧" : "あなたの申請一覧"}</h2>
         <div style={{ overflowX: "auto" }}>
           <table>
             <thead>
@@ -40,7 +40,7 @@ export default async function LeavePage() {
                 <th>終了</th>
                 <th>理由</th>
                 <th>状態</th>
-                {isAdminOrApprover && <th>操作</th>}
+                {isAdmin && <th>操作</th>}
               </tr>
             </thead>
             <tbody>
@@ -52,7 +52,7 @@ export default async function LeavePage() {
                   <td>{formatLocal(r.endAt)}</td>
                   <td>{r.reason ?? "-"}</td>
                   <td>{r.status}</td>
-                  {isAdminOrApprover && (
+                  {isAdmin && (
                     <td>
                       {r.status === "PENDING" && r.userId !== userId ? (
                         <LeaveDecideButtons id={r.id} />
@@ -65,7 +65,7 @@ export default async function LeavePage() {
               ))}
               {requests.length === 0 && (
                 <tr>
-                  <td colSpan={isAdminOrApprover ? 7 : 6} style={{ textAlign: "center", opacity: 0.6 }}>
+                  <td colSpan={isAdmin ? 7 : 6} style={{ textAlign: "center", opacity: 0.6 }}>
                     申請なし
                   </td>
                 </tr>

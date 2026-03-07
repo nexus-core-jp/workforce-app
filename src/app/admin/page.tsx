@@ -243,7 +243,7 @@ export default async function AdminPage() {
         ).length
       : 0;
 
-  const roleLabel = role === "ADMIN" ? "管理者" : "承認者";
+  const roleLabel = "管理者";
 
   return (
     <>

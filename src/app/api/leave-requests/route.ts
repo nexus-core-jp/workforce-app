@@ -29,10 +29,10 @@ export async function GET() {
 
   const { tenantId, id: userId, role } = user;
 
-  const isAdminOrApprover = role === "ADMIN" || role === "APPROVER";
+  const isAdmin = role === "ADMIN";
 
   const requests = await prisma.leaveRequest.findMany({
-    where: isAdminOrApprover ? { tenantId } : { tenantId, userId },
+    where: isAdmin ? { tenantId } : { tenantId, userId },
     orderBy: { createdAt: "desc" },
     take: 50,
     include: { user: { select: { name: true, email: true } } },

@@ -10,7 +10,7 @@ export default async function DailyReportsPage() {
   if (!session) redirect("/login");
 
   const { id: userId, tenantId, role } = session.user;
-  const isAdmin = role === "ADMIN" || role === "APPROVER";
+  const isAdmin = role === "ADMIN";
 
   const reports = await prisma.dailyReport.findMany({
     where: isAdmin ? { tenantId } : { tenantId, userId },

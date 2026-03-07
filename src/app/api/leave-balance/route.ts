@@ -19,7 +19,7 @@ export async function GET(req: Request) {
   const targetUserId = url.searchParams.get("userId") ?? userId;
 
   // Non-admin can only see own balance
-  if (targetUserId !== userId && role !== "ADMIN" && role !== "APPROVER") {
+  if (targetUserId !== userId && role !== "ADMIN") {
     return jsonError("Forbidden", 403);
   }
 

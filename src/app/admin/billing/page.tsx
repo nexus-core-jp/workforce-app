@@ -26,7 +26,7 @@ export default async function BillingPage() {
 
   const tenant = await prisma.tenant.findUnique({
     where: { id: user.tenantId },
-    select: { name: true, plan: true, trialEndsAt: true },
+    select: { name: true, plan: true, trialEndsAt: true, paymentMethod: true },
   });
   if (!tenant) redirect("/dashboard");
 
@@ -82,7 +82,7 @@ export default async function BillingPage() {
             )}
           </div>
 
-          <BillingActions plan={tenant.plan} />
+          <BillingActions plan={tenant.plan} paymentMethod={tenant.paymentMethod} />
         </section>
       </main>
     </>

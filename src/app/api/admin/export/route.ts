@@ -56,7 +56,7 @@ export async function GET(req: Request) {
       include: { department: { select: { name: true } } },
     });
     const headers = ["名前", "メール", "ロール", "部署", "有効", "登録日"];
-    const roleLabels: Record<string, string> = { EMPLOYEE: "社員", APPROVER: "承認者", ADMIN: "管理者", SUPER_ADMIN: "スーパー管理者" };
+    const roleLabels: Record<string, string> = { EMPLOYEE: "社員", ADMIN: "管理者", SUPER_ADMIN: "スーパー管理者" };
     const rows = members.map((m) => [
       m.name ?? "",
       m.email,

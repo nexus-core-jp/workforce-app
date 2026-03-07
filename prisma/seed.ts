@@ -75,18 +75,6 @@ async function main() {
     },
   });
 
-  await prisma.user.upsert({
-    where: { tenantId_email: { tenantId: tenant.id, email: "suzuki@demo.local" } },
-    update: { name: "鈴木花子", role: UserRole.APPROVER, passwordHash: demoHash, active: true },
-    create: {
-      tenantId: tenant.id,
-      email: "suzuki@demo.local",
-      name: "鈴木花子",
-      role: UserRole.APPROVER,
-      passwordHash: demoHash,
-    },
-  });
-
   console.log("Seeded successfully!");
   console.log("");
   console.log("=== スーパー管理者 ===");
@@ -95,9 +83,8 @@ async function main() {
   console.log(`  PW:     ${superPassword}`);
   console.log("");
   console.log("=== Demo テナント (共通パスワード) ===");
-  console.log("  管理者:  admin@demo.local");
-  console.log("  従業員:  tanaka@demo.local");
-  console.log("  承認者:  suzuki@demo.local");
+  console.log("  管理者: admin@demo.local");
+  console.log("  従業員: tanaka@demo.local");
   console.log(`  PW:     ${demoPassword}`);
   console.log("");
   console.log("⚠ このパスワードは初回のみ表示されます。安全に保管してください。");

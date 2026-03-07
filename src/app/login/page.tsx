@@ -98,7 +98,7 @@ function LoginForm() {
                 } else if (res.error.includes("TOTP_INVALID")) {
                   setError("認証コードが正しくありません");
                 } else {
-                  setError("会社ID、メールアドレス、またはパスワードが正しくありません");
+                  setError("会社ID（会社登録時の英数字ID）、メールアドレス、またはパスワードが正しくありません");
                 }
               } else {
                 router.push("/dashboard");
@@ -115,6 +115,7 @@ function LoginForm() {
             <label style={{ display: "grid", gap: 6 }}>
               <span>会社ID</span>
               <input value={tenant} onChange={(e) => setTenant(e.target.value)} required disabled={loading} autoComplete="organization" placeholder="例: demo" />
+              <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>会社登録時に設定した英数字のIDです</span>
             </label>
 
             <label style={{ display: "grid", gap: 6 }}>
@@ -139,6 +140,7 @@ function LoginForm() {
                 required
                 disabled={loading}
                 autoComplete="current-password"
+                placeholder="8文字以上"
               />
             </label>
 
@@ -212,9 +214,8 @@ function LoginForm() {
             デモアカウント（会社ID: demo）
           </p>
           <div style={{ display: "grid", gap: 4, fontSize: 12, fontFamily: "monospace", color: "var(--color-text-secondary)" }}>
-            <div>管理者: admin@demo.local / password123</div>
-            <div>承認者: suzuki@demo.local / password123</div>
-            <div>従業員: tanaka@demo.local / password123</div>
+            <div>管理者: admin@demo.local / Demo1234</div>
+            <div>従業員: tanaka@demo.local / Demo1234</div>
           </div>
         </div>
 

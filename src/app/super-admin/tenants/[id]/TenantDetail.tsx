@@ -8,11 +8,14 @@ import { Logo } from "../../../Logo";
 type TenantPlan = "TRIAL" | "ACTIVE" | "SUSPENDED";
 type UserRole = string;
 
+type PaymentMethodType = "STRIPE" | "PAYJP" | "BANK_TRANSFER" | "NONE";
+
 interface TenantInfo {
   id: string;
   name: string;
   slug: string;
   plan: TenantPlan;
+  paymentMethod?: PaymentMethodType;
   trialEndsAt: string | null;
   createdAt: string;
 }
@@ -150,6 +153,12 @@ export function TenantDetail({ tenant, users }: { tenant: TenantInfo; users: Use
                   month: "2-digit",
                   day: "2-digit",
                 }).format(new Date(tenant.createdAt))}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>決済方法</div>
+              <div style={{ fontSize: 16, fontWeight: 600 }}>
+                {tenant.paymentMethod === "STRIPE" ? "Stripe" : tenant.paymentMethod === "PAYJP" ? "PAY.JP" : tenant.paymentMethod === "BANK_TRANSFER" ? "銀行振込" : "未設定"}
               </div>
             </div>
             <div>

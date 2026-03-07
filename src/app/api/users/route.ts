@@ -30,7 +30,7 @@ const createSchema = z.object({
   email: z.string().email(),
   name: z.string().min(1).max(100),
   password: z.string().min(8),
-  role: z.enum(["EMPLOYEE", "APPROVER", "ADMIN"]),
+  role: z.enum(["EMPLOYEE", "ADMIN"]),
 });
 
 export async function POST(req: Request) {

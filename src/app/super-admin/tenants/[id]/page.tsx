@@ -45,6 +45,7 @@ export default async function TenantDetailPage({ params }: Props) {
         name: tenant.name,
         slug: tenant.slug,
         plan: tenant.plan,
+        paymentMethod: tenant.paymentMethod,
         trialEndsAt: tenant.trialEndsAt?.toISOString() ?? null,
         createdAt: tenant.createdAt.toISOString(),
       }}

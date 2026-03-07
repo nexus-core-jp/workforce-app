@@ -21,7 +21,7 @@ export default async function FaceRegisterPage() {
   });
   if (!tenant?.faceAuthEnabled) redirect("/dashboard");
 
-  const roleLabel = user.role === "ADMIN" ? "管理者" : user.role === "APPROVER" ? "承認者" : "従業員";
+  const roleLabel = user.role === "ADMIN" ? "管理者" : "従業員";
 
   return (
     <>

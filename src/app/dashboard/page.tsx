@@ -190,7 +190,7 @@ export default async function DashboardPage() {
 
       <main className="page-container">
         {/* Admin link */}
-        {(isAdmin || role === "APPROVER") && (
+        {isAdmin && (
           <nav style={{ marginBottom: 8, display: "flex", gap: 12, flexWrap: "wrap" }}>
             <Link href="/admin" style={{ fontWeight: 500 }}>
               管理画面 →

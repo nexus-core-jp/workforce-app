@@ -14,7 +14,7 @@ interface PendingCorrection {
 }
 
 interface Props {
-  isAdminOrApprover: boolean;
+  isAdmin: boolean;
   pendingCount: number;
   pendingForApproval: PendingCorrection[];
   onToast: (text: string, type: "success" | "error") => void;
@@ -54,7 +54,7 @@ export function CorrectionsPanel(props: Props) {
     });
   };
 
-  if (!props.isAdminOrApprover) {
+  if (!props.isAdmin) {
     return (
       <section>
         <h2 style={{ marginBottom: 12 }}>打刻修正申請</h2>

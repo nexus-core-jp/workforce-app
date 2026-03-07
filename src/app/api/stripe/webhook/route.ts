@@ -52,6 +52,7 @@ export async function POST(request: Request) {
           where: { id: tenantId },
           data: {
             plan: "ACTIVE",
+            paymentMethod: "STRIPE",
             stripeSubscriptionId: String(session.subscription ?? ""),
           },
         });
