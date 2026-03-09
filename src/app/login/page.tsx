@@ -46,7 +46,8 @@ function LoginForm() {
     setError(null);
     setLoading(true);
     // Store tenant in cookie so the auth callback can identify which tenant to check
-    document.cookie = `line_auth_tenant=${encodeURIComponent(tenant)}; path=/; max-age=600; SameSite=Lax`;
+    const securePart = window.location.protocol === 'https:' ? '; Secure' : '';
+    document.cookie = `line_auth_tenant=${encodeURIComponent(tenant)}; path=/; max-age=600; SameSite=Lax${securePart}`;
     signIn("line", { callbackUrl: "/dashboard" });
   };
 
