@@ -307,29 +307,29 @@ export default async function AdminPage() {
 
         {/* Overview cards */}
         <section>
-          <h2 style={{ marginBottom: 12 }}>本日の概況</h2>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
-            <div>
-              <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>メンバー数</div>
-              <div style={{ fontSize: 20, fontWeight: 700 }}>{memberCount} 名</div>
+          <h2 style={{ marginBottom: 16 }}>本日の概況</h2>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
+            <div className="stat-card">
+              <div className="stat-label">メンバー数</div>
+              <div className="stat-value">{memberCount} 名</div>
             </div>
-            <div>
-              <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>本日出勤</div>
-              <div style={{ fontSize: 20, fontWeight: 700 }}>{todayEntries} 名</div>
+            <div className="stat-card">
+              <div className="stat-label">本日出勤</div>
+              <div className="stat-value">{todayEntries} 名</div>
             </div>
-            <div>
-              <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>退勤済み</div>
-              <div style={{ fontSize: 20, fontWeight: 700 }}>{todayClockedOut} 名</div>
+            <div className="stat-card">
+              <div className="stat-label">退勤済み</div>
+              <div className="stat-value">{todayClockedOut} 名</div>
             </div>
-            <div>
-              <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>未処理修正</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: pendingCorrections.length > 0 ? "var(--color-warning)" : undefined }}>
+            <div className="stat-card">
+              <div className="stat-label">未処理修正</div>
+              <div className="stat-value" style={{ color: pendingCorrections.length > 0 ? "var(--color-warning)" : undefined }}>
                 {pendingCorrections.length} 件
               </div>
             </div>
-            <div>
-              <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>未処理休暇</div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: pendingLeaves.length > 0 ? "var(--color-warning)" : undefined }}>
+            <div className="stat-card">
+              <div className="stat-label">未処理休暇</div>
+              <div className="stat-value" style={{ color: pendingLeaves.length > 0 ? "var(--color-warning)" : undefined }}>
                 {pendingLeaves.length} 件
               </div>
             </div>

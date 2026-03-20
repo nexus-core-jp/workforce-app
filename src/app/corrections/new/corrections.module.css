@@ -10,36 +10,45 @@
   gap: 0.25rem;
   font-size: 0.875rem;
   margin-bottom: 1rem;
+  color: var(--color-text-secondary);
+  transition: color var(--transition-fast);
+}
+
+.backLink:hover {
+  color: var(--color-primary);
 }
 
 .title {
   font-size: 1.25rem;
   font-weight: 700;
   margin-bottom: 1.5rem;
+  letter-spacing: -0.01em;
 }
 
 .card {
-  background: var(--color-bg);
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  padding: 1.25rem;
+  padding: 1.5rem;
+  box-shadow: var(--shadow-sm);
 }
 
 .dateBadge {
   display: inline-flex;
-  padding: 0.25rem 0.75rem;
-  background: var(--color-bg-secondary);
+  padding: 0.3rem 0.875rem;
+  background: var(--color-primary-light);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  font-size: 0.875rem;
-  font-weight: 500;
-  margin-bottom: 1rem;
+  border-radius: 9999px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  margin-bottom: 1.25rem;
+  color: var(--color-primary);
 }
 
 .field {
   display: grid;
   gap: 0.375rem;
-  margin-bottom: 1rem;
+  margin-bottom: 1.125rem;
 }
 
 .fieldLabel {
@@ -55,13 +64,14 @@
 }
 
 .error {
-  padding: 0.625rem 0.75rem;
+  padding: 0.75rem 1rem;
   background: var(--color-error-bg);
   color: var(--color-danger);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   font-size: 0.8125rem;
   font-weight: 500;
   margin-bottom: 1rem;
+  border-left: 3px solid var(--color-danger);
 }
 
 .submitRow {

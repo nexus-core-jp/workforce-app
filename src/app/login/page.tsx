@@ -4,6 +4,7 @@ import { Suspense, useState, useEffect } from "react";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
+import styles from "./login.module.css";
 
 const LINE_ERROR_MESSAGES: Record<string, string> = {
   LINE_NOT_LINKED: "このLINEアカウントは会社IDに紐づいていません。先にアカウント連携を行ってください。",
@@ -52,32 +53,20 @@ function LoginForm() {
   };
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: 400,
-          padding: 32,
-          background: "var(--color-surface)",
-          border: "1px solid var(--color-border)",
-          borderRadius: "var(--radius)",
-          boxShadow: "var(--shadow-md)",
-        }}
-      >
-        <h1 style={{ fontSize: 24, marginBottom: 4 }}><span className="logo"><span className="logo-icon" style={{ width: 32, height: 32, fontSize: 13 }}>WN</span><span className="logo-text">Workforce Nexus</span></span></h1>
-        <p style={{ color: "var(--color-text-secondary)", fontSize: 14, marginBottom: 24 }}>
+    <main className={styles.page}>
+      <div className={styles.card}>
+        <h1 className={styles.title}>
+          <span className="logo">
+            <span className="logo-icon" style={{ width: 32, height: 32, fontSize: 13 }}>WN</span>
+            <span className="logo-text">Workforce Nexus</span>
+          </span>
+        </h1>
+        <p className={styles.subtitle}>
           勤怠管理システムにログイン
         </p>
 
         <form
-          style={{ display: "grid", gap: 16 }}
+          className={styles.form}
           onSubmit={async (e) => {
             e.preventDefault();
             setError(null);
@@ -113,76 +102,68 @@ function LoginForm() {
             }
           }}
         >
-          <div style={{ display: "grid", gap: 16 }}>
-            <label style={{ display: "grid", gap: 6 }}>
-              <span>会社ID</span>
-              <input value={tenant} onChange={(e) => setTenant(e.target.value)} required disabled={loading} autoComplete="organization" placeholder="例: demo" />
-              <span style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>会社登録時に設定した英数字のIDです</span>
-            </label>
-
-            <label style={{ display: "grid", gap: 6 }}>
-              <span>メールアドレス</span>
-              <input
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                type="email"
-                required
-                disabled={loading}
-                autoComplete="email"
-                placeholder="you@example.com"
-              />
-            </label>
-
-            <label style={{ display: "grid", gap: 6 }}>
-              <span>パスワード</span>
-              <input
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                type="password"
-                required
-                disabled={loading}
-                autoComplete="current-password"
-                placeholder="8文字以上"
-              />
-            </label>
-
-            {needsTotp && (
-              <label style={{ display: "grid", gap: 6 }}>
-                <span>認証コード（2FA）</span>
-                <input
-                  value={totpCode}
-                  onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]{6}"
-                  maxLength={6}
-                  required
-                  autoComplete="one-time-code"
-                  placeholder="6桁の認証コード"
-                  autoFocus
-                />
-              </label>
-            )}
-
-            <button type="submit" data-variant="primary" disabled={loading} style={{ marginTop: 8 }}>
-              {loading ? "ログイン中..." : needsTotp ? "認証コードを送信" : "ログイン"}
-            </button>
+          <div className={styles.field}>
+            <label className={styles.fieldLabel}>会社ID</label>
+            <input value={tenant} onChange={(e) => setTenant(e.target.value)} required disabled={loading} autoComplete="organization" placeholder="例: demo" />
+            <span className={styles.fieldHint}>会社登録時に設定した英数字のIDです</span>
           </div>
 
-          {error ? <p className="error-text" role="alert">{error}</p> : null}
+          <div className={styles.field}>
+            <label className={styles.fieldLabel}>メールアドレス</label>
+            <input
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              type="email"
+              required
+              disabled={loading}
+              autoComplete="email"
+              placeholder="you@example.com"
+            />
+          </div>
+
+          <div className={styles.field}>
+            <label className={styles.fieldLabel}>パスワード</label>
+            <input
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              type="password"
+              required
+              disabled={loading}
+              autoComplete="current-password"
+              placeholder="8文字以上"
+            />
+          </div>
+
+          {needsTotp && (
+            <div className={styles.field}>
+              <label className={styles.fieldLabel}>認証コード（2FA）</label>
+              <input
+                value={totpCode}
+                onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]{6}"
+                maxLength={6}
+                required
+                autoComplete="one-time-code"
+                placeholder="6桁の認証コード"
+                autoFocus
+              />
+            </div>
+          )}
+
+          <button type="submit" data-variant="primary" disabled={loading} className={styles.submitBtn}>
+            {loading && <span className={styles.spinner} />}
+            {loading ? "ログイン中..." : needsTotp ? "認証コードを送信" : "ログイン"}
+          </button>
+
+          {error && <p className={styles.error} role="alert">{error}</p>}
         </form>
 
         {/* Divider */}
-        <div style={{ position: "relative", textAlign: "center", margin: "20px 0 16px" }}>
-          <hr style={{ border: "none", borderTop: "1px solid var(--color-border)" }} />
-          <span style={{
-            position: "absolute", top: "50%", left: "50%",
-            transform: "translate(-50%, -50%)",
-            background: "var(--color-surface)", padding: "0 12px",
-            color: "var(--color-text-secondary)", fontSize: 12,
-          }}>
-            または
-          </span>
+        <div className={styles.divider}>
+          <hr className={styles.dividerLine} />
+          <span className={styles.dividerText}>または</span>
         </div>
 
         {/* LINE Login Button */}
@@ -190,43 +171,26 @@ function LoginForm() {
           type="button"
           onClick={handleLineLogin}
           disabled={loading}
-          style={{
-            width: "100%",
-            background: "#06C755",
-            color: "white",
-            border: "none",
-            borderRadius: 8,
-            padding: "12px 16px",
-            fontSize: 16,
-            fontWeight: 600,
-          }}
+          className={styles.lineBtn}
         >
           LINEでログイン
         </button>
 
         {/* Demo account info */}
-        <div style={{
-          marginTop: 20,
-          padding: "14px 16px",
-          background: "var(--color-bg)",
-          border: "1px solid var(--color-border)",
-          borderRadius: 8,
-        }}>
-          <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: "var(--color-text-secondary)" }}>
+        <div className={styles.demoBox}>
+          <p className={styles.demoTitle}>
             デモアカウント（会社ID: demo）
           </p>
-          <div style={{ display: "grid", gap: 4, fontSize: 12, fontFamily: "monospace", color: "var(--color-text-secondary)" }}>
+          <div className={styles.demoAccounts}>
             <div>管理者: admin@demo.local / Demo1234</div>
             <div>従業員: tanaka@demo.local / Demo1234</div>
           </div>
         </div>
 
-        <p style={{ marginTop: 16, fontSize: 14, textAlign: "center" }}>
+        <div className={styles.links}>
           <Link href="/forgot-password">パスワードをお忘れですか？</Link>
-        </p>
-        <p style={{ marginTop: 8, fontSize: 14, textAlign: "center" }}>
           <Link href="/register">新規会社登録はこちら</Link>
-        </p>
+        </div>
       </div>
     </main>
   );
