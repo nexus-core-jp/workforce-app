@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { AdSenseScript } from "@/components/ads/AdSenseScript";
 import { ServiceWorkerRegister } from "./ServiceWorkerRegister";
 
 export const metadata: Metadata = {
@@ -36,6 +37,7 @@ export default function RootLayout({
       <body>
         {children}
         <ServiceWorkerRegister />
+        <AdSenseScript />
       </body>
     </html>
   );

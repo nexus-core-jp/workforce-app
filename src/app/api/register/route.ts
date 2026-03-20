@@ -54,9 +54,6 @@ export async function POST(request: Request) {
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
-    const trialEndsAt = new Date();
-    trialEndsAt.setDate(trialEndsAt.getDate() + 30);
-
     const verifyToken = crypto.randomUUID();
 
     await prisma.$transaction(async (tx) => {
@@ -64,8 +61,7 @@ export async function POST(request: Request) {
         data: {
           name: companyName,
           slug,
-          plan: "TRIAL",
-          trialEndsAt,
+          plan: "FREE",
           emailVerified: false,
         },
       });

@@ -11,7 +11,8 @@ import { BillingActions } from "./BillingActions";
 
 const planLabel: Record<string, string> = {
   TRIAL: "トライアル",
-  ACTIVE: "アクティブ",
+  FREE: "無料 (広告あり)",
+  ACTIVE: "プレミアム (広告なし)",
   SUSPENDED: "停止中",
 };
 

@@ -6,7 +6,7 @@ import { prisma } from "@/lib/db";
 import { toSessionUser } from "@/lib/session";
 
 const planSchema = z.object({
-  plan: z.enum(["TRIAL", "ACTIVE", "SUSPENDED"]).optional(),
+  plan: z.enum(["TRIAL", "FREE", "ACTIVE", "SUSPENDED"]).optional(),
   action: z.enum(["VIEW_PII"]).optional(),
 });
 

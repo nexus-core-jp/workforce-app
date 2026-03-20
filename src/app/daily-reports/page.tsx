@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { formatLocal } from "@/lib/time";
+import { AdContainer } from "@/components/ads/AdContainer";
+import { AdSlot } from "@/components/ads/AdSlot";
 
 export default async function DailyReportsPage() {
   const session = await auth();
@@ -12,12 +14,18 @@ export default async function DailyReportsPage() {
   const { id: userId, tenantId, role } = session.user;
   const isAdmin = role === "ADMIN";
 
-  const reports = await prisma.dailyReport.findMany({
-    where: isAdmin ? { tenantId } : { tenantId, userId },
-    orderBy: { date: "desc" },
-    take: 30,
-    include: { user: { select: { name: true, email: true } } },
-  });
+  const [reports, tenant] = await Promise.all([
+    prisma.dailyReport.findMany({
+      where: isAdmin ? { tenantId } : { tenantId, userId },
+      orderBy: { date: "desc" },
+      take: 30,
+      include: { user: { select: { name: true, email: true } } },
+    }),
+    prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { plan: true },
+    }),
+  ]);
 
   return (
     <main style={{ padding: 24, fontFamily: "system-ui" }}>
@@ -72,6 +80,11 @@ export default async function DailyReportsPage() {
           </table>
         </div>
       </section>
+
+      {/* Ad banner - footer (FREE plan only) */}
+      <AdContainer plan={tenant?.plan ?? "FREE"} slotId="daily-reports-footer">
+        <AdSlot slotId="daily-reports-footer" />
+      </AdContainer>
 
       <nav style={{ marginTop: 24 }}>
         <Link href="/dashboard">← ダッシュボード</Link>

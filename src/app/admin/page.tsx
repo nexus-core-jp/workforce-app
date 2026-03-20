@@ -8,6 +8,10 @@ import { startOfJstDay } from "@/lib/time";
 
 import { ClosePanel } from "../dashboard/ClosePanel";
 import { NotificationBell } from "../dashboard/NotificationBell";
+import { AdContainer } from "@/components/ads/AdContainer";
+import { AdSlot } from "@/components/ads/AdSlot";
+import { PremiumUpsell } from "@/components/ads/PremiumUpsell";
+
 import { Logo } from "../Logo";
 import { AdminCorrections } from "./AdminCorrections";
 import { AdminDailyReports } from "./AdminDailyReports";
@@ -370,6 +374,16 @@ export default async function AdminPage() {
             totalUsers={allMembers.length}
           />
         )}
+
+        {/* Ad sidebar - bottom of admin page (FREE plan only) */}
+        <AdContainer plan={tenant?.plan ?? "FREE"} slotId="admin-sidebar">
+          <AdSlot slotId="admin-sidebar" />
+        </AdContainer>
+
+        {/* Premium upsell for admin (FREE plan only) */}
+        <AdContainer plan={tenant?.plan ?? "FREE"} slotId="admin-sidebar">
+          <PremiumUpsell isAdmin={true} />
+        </AdContainer>
       </main>
     </>
   );

@@ -10,6 +10,10 @@ import { addJstDays, formatLocal, startOfJstDay } from "@/lib/time";
 import { calcDailyOvertime, STANDARD_DAILY_MINUTES, MONTHLY_OVERTIME_LIMIT_MINUTES } from "@/lib/overtime";
 import { isFaceAuthAvailable } from "@/lib/face-auth-config";
 
+import { AdContainer } from "@/components/ads/AdContainer";
+import { AdSlot } from "@/components/ads/AdSlot";
+import { PremiumUpsell } from "@/components/ads/PremiumUpsell";
+
 import { Logo } from "../Logo";
 import { DailyReportPanel } from "./DailyReportPanel";
 import { History } from "./History";
@@ -168,7 +172,12 @@ export default async function DashboardPage() {
         </div>
       </header>
 
-      {/* Trial banner */}
+      {/* Plan banner */}
+      {tenant?.plan === "FREE" && (
+        <div className="trial-banner">
+          無料プラン (広告あり) をご利用中です
+        </div>
+      )}
       {tenant?.plan === "TRIAL" && (() => {
         const now = new Date();
         const trialDays = tenant.trialEndsAt
@@ -187,6 +196,11 @@ export default async function DashboardPage() {
           </div>
         );
       })()}
+
+      {/* Ad banner - top of page (FREE plan only) */}
+      <AdContainer plan={tenant?.plan ?? "FREE"} slotId="dashboard-top">
+        <AdSlot slotId="dashboard-top" />
+      </AdContainer>
 
       <main className="page-container">
         {/* Admin link */}
@@ -300,6 +314,16 @@ export default async function DashboardPage() {
             <Link href="/dashboard/face-register">顔データを登録・管理 →</Link>
           </section>
         )}
+
+        {/* Ad rectangle - bottom of page (FREE plan only) */}
+        <AdContainer plan={tenant?.plan ?? "FREE"} slotId="dashboard-bottom">
+          <AdSlot slotId="dashboard-bottom" />
+        </AdContainer>
+
+        {/* Premium upsell (FREE plan only) */}
+        <AdContainer plan={tenant?.plan ?? "FREE"} slotId="dashboard-bottom">
+          <PremiumUpsell isAdmin={isAdmin} />
+        </AdContainer>
       </main>
     </>
   );

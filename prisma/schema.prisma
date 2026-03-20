@@ -622,6 +622,7 @@ model RateLimitEntry {
 
 enum TenantPlan {
   TRIAL
+  FREE
   ACTIVE
   SUSPENDED
 }
