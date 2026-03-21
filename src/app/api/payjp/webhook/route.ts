@@ -83,6 +83,7 @@ export async function POST(request: Request) {
       }
 
       case "subscription.deleted": {
+        // Downgrade to FREE (ad-supported) instead of SUSPENDED
         const customerId = data.customer as string | undefined;
         if (!customerId) break;
 
@@ -94,7 +95,7 @@ export async function POST(request: Request) {
 
         await prisma.tenant.update({
           where: { id: tenant.id },
-          data: { plan: "SUSPENDED", payjpSubscriptionId: null },
+          data: { plan: "FREE", payjpSubscriptionId: null },
         });
 
         await prisma.auditLog.create({
@@ -104,7 +105,7 @@ export async function POST(request: Request) {
             entityType: "Tenant",
             entityId: tenant.id,
             beforeJson: { plan: tenant.plan },
-            afterJson: { plan: "SUSPENDED", payjpEventType: type },
+            afterJson: { plan: "FREE", payjpEventType: type },
           },
         });
         break;

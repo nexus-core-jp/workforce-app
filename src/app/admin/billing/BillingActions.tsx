@@ -104,9 +104,14 @@ export function BillingActions({ plan, paymentMethod }: Props) {
     );
   }
 
-  // TRIAL or SUSPENDED: show payment method selection
+  // FREE, TRIAL, or SUSPENDED: show payment method selection
   return (
     <div>
+      {plan === "FREE" && (
+        <p style={{ color: "var(--color-primary)", marginBottom: 12, fontWeight: 500 }}>
+          プレミアムプランにアップグレードすると広告が非表示になります。
+        </p>
+      )}
       {plan === "SUSPENDED" && (
         <p style={{ color: "var(--color-danger)", marginBottom: 12 }}>
           アカウントが停止されています。再度サブスクリプションを開始してください。

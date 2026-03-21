@@ -1,0 +1,6 @@
+# ads.txt - Workforce Nexus
+# Replace pub-XXXXXXXXXXXXXXXX with your actual Google AdSense publisher ID
+# after AdSense account approval.
+#
+# Format: <domain>, <publisher-id>, <relationship>, <certification-authority-id>
+google.com, pub-XXXXXXXXXXXXXXXX, DIRECT, f08c47fec0942fa0

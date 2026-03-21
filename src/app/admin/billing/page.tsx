@@ -85,6 +85,76 @@ export default async function BillingPage() {
 
           <BillingActions plan={tenant.plan} paymentMethod={tenant.paymentMethod} />
         </section>
+
+        {/* Plan comparison table (shown for FREE/TRIAL plans) */}
+        {(tenant.plan === "FREE" || tenant.plan === "TRIAL") && (
+          <section style={{ marginTop: 32 }}>
+            <h2 style={{ marginBottom: 16 }}>プラン比較</h2>
+            <div style={{ overflowX: "auto" }}>
+              <table>
+                <thead>
+                  <tr>
+                    <th>機能</th>
+                    <th>
+                      無料プラン
+                      {tenant.plan === "FREE" && (
+                        <span className="badge badge-free" style={{ marginLeft: 8 }}>現在</span>
+                      )}
+                    </th>
+                    <th>
+                      プレミアムプラン
+                      {tenant.plan === "ACTIVE" && (
+                        <span className="badge badge-closed" style={{ marginLeft: 8 }}>現在</span>
+                      )}
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>勤怠管理（打刻・履歴）</td>
+                    <td style={{ color: "var(--color-success)" }}>利用可</td>
+                    <td style={{ color: "var(--color-success)" }}>利用可</td>
+                  </tr>
+                  <tr>
+                    <td>日報管理</td>
+                    <td style={{ color: "var(--color-success)" }}>利用可</td>
+                    <td style={{ color: "var(--color-success)" }}>利用可</td>
+                  </tr>
+                  <tr>
+                    <td>休暇管理</td>
+                    <td style={{ color: "var(--color-success)" }}>利用可</td>
+                    <td style={{ color: "var(--color-success)" }}>利用可</td>
+                  </tr>
+                  <tr>
+                    <td>給与計算</td>
+                    <td style={{ color: "var(--color-success)" }}>利用可</td>
+                    <td style={{ color: "var(--color-success)" }}>利用可</td>
+                  </tr>
+                  <tr>
+                    <td>CSV エクスポート</td>
+                    <td style={{ color: "var(--color-success)" }}>利用可</td>
+                    <td style={{ color: "var(--color-success)" }}>利用可</td>
+                  </tr>
+                  <tr>
+                    <td>顔認証打刻</td>
+                    <td style={{ color: "var(--color-success)" }}>利用可</td>
+                    <td style={{ color: "var(--color-success)" }}>利用可</td>
+                  </tr>
+                  <tr>
+                    <td style={{ fontWeight: 600 }}>広告表示</td>
+                    <td style={{ color: "var(--color-warning)" }}>あり</td>
+                    <td style={{ color: "var(--color-success)", fontWeight: 600 }}>なし</td>
+                  </tr>
+                  <tr>
+                    <td style={{ fontWeight: 600 }}>優先サポート</td>
+                    <td style={{ color: "var(--color-muted)" }}>-</td>
+                    <td style={{ color: "var(--color-success)", fontWeight: 600 }}>対応</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
       </main>
     </>
   );

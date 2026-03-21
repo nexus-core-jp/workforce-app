@@ -87,9 +87,30 @@ export const AD_SLOTS: Record<AdSlotId, AdSlotConfig> = {
   },
 };
 
+/** Ad provider type */
+export type AdProvider = "adsense" | "custom";
+
+/** Returns the configured ad provider */
+export function getAdProvider(): AdProvider {
+  const provider = process.env.NEXT_PUBLIC_AD_PROVIDER ?? "adsense";
+  return provider === "custom" ? "custom" : "adsense";
+}
+
 /** Returns the Google AdSense client ID from env */
 export function getAdSenseClientId(): string {
   return process.env.NEXT_PUBLIC_ADSENSE_CLIENT_ID ?? "";
+}
+
+/**
+ * Returns custom ad HTML for a given slot.
+ * Used for affiliate ads (A8.net, etc.) via environment variables.
+ *
+ * Env var naming: NEXT_PUBLIC_AD_CUSTOM_HTML_{SLOT_ID_UPPER}
+ * e.g. NEXT_PUBLIC_AD_CUSTOM_HTML_DASHBOARD_TOP
+ */
+export function getCustomAdHtml(slotId: AdSlotId): string {
+  const envKey = slotId.replace(/-/g, "_").toUpperCase();
+  return process.env[`NEXT_PUBLIC_AD_CUSTOM_HTML_${envKey}`] ?? "";
 }
 
 /** Check if ads should be shown for a given plan */

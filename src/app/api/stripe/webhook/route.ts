@@ -139,9 +139,10 @@ export async function POST(request: Request) {
         const tenant = await findTenantByCustomer(subscription.customer);
         if (tenant) {
           // Update plan based on subscription status
-          let newPlan: "ACTIVE" | "SUSPENDED" = "ACTIVE";
+          // canceled/unpaid → downgrade to FREE (ad-supported) instead of SUSPENDED
+          let newPlan: "ACTIVE" | "FREE" = "ACTIVE";
           if (subscription.status === "canceled" || subscription.status === "unpaid" || subscription.status === "past_due") {
-            newPlan = "SUSPENDED";
+            newPlan = "FREE";
           }
           await prisma.tenant.update({
             where: { id: tenant.id },
@@ -174,9 +175,11 @@ export async function POST(request: Request) {
         const subscription = event.data.object as Stripe.Subscription;
         const tenant = await findTenantByCustomer(subscription.customer);
         if (tenant) {
+          // Downgrade to FREE (ad-supported) instead of SUSPENDED
+          // User can continue using the service with ads
           await prisma.tenant.update({
             where: { id: tenant.id },
-            data: { plan: "SUSPENDED", stripeSubscriptionId: null },
+            data: { plan: "FREE", stripeSubscriptionId: null },
           });
           await prisma.auditLog.create({
             data: {
@@ -185,7 +188,7 @@ export async function POST(request: Request) {
               entityType: "Tenant",
               entityId: tenant.id,
               beforeJson: { plan: tenant.plan },
-              afterJson: { plan: "SUSPENDED", stripeEventId: event.id },
+              afterJson: { plan: "FREE", stripeEventId: event.id },
             },
           });
         }
