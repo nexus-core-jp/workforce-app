@@ -5,6 +5,7 @@ import { auth, signOut } from "@/auth";
 import { toSessionUser } from "@/lib/session";
 
 import { Logo } from "../../Logo";
+import { AdRevenueDashboard } from "./AdRevenueDashboard";
 import { RevenueDashboard } from "./RevenueDashboard";
 
 export default async function RevenuePage() {
@@ -39,6 +40,11 @@ export default async function RevenuePage() {
         </nav>
         <h2 style={{ marginBottom: 16 }}>収益ダッシュボード</h2>
         <RevenueDashboard />
+
+        <hr style={{ margin: "32px 0", border: "none", borderTop: "1px solid var(--color-border)" }} />
+
+        <h2 style={{ marginBottom: 16 }}>広告収益</h2>
+        <AdRevenueDashboard />
       </main>
     </>
   );

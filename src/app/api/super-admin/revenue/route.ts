@@ -48,11 +48,12 @@ export async function GET() {
     }
 
     // Trial-to-paid conversion rate
-    const [totalTenants, activeTenants, trialTenants, suspendedTenants] = await Promise.all([
+    const [totalTenants, activeTenants, trialTenants, suspendedTenants, freeTenants] = await Promise.all([
       prisma.tenant.count({ where: { slug: { not: "__platform" } } }),
       prisma.tenant.count({ where: { slug: { not: "__platform" }, plan: "ACTIVE" } }),
       prisma.tenant.count({ where: { slug: { not: "__platform" }, plan: "TRIAL" } }),
       prisma.tenant.count({ where: { slug: { not: "__platform" }, plan: "SUSPENDED" } }),
+      prisma.tenant.count({ where: { slug: { not: "__platform" }, plan: "FREE" } }),
     ]);
 
     // Conversion rate = active / (active + suspended) — those who reached decision point
@@ -122,6 +123,7 @@ export async function GET() {
       totalTenants,
       activeTenants,
       trialTenants,
+      freeTenants,
       suspendedTenants,
       conversionRate,
       churnRate,

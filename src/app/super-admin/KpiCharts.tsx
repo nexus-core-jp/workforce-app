@@ -23,6 +23,7 @@ interface KpiChartsProps {
 }
 
 const PLAN_COLORS: Record<string, string> = {
+  FREE: "#3b82f6",
   TRIAL: "#f59e0b",
   ACTIVE: "#22c55e",
   SUSPENDED: "#ef4444",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { AD_SLOTS, getAdProvider, getAdSenseClientId, getCustomAdHtml, type AdSlotId } from "@/lib/ads";
 
 interface AdSlotProps {
@@ -20,10 +20,29 @@ interface AdSlotProps {
  */
 export function AdSlot({ slotId, className }: AdSlotProps) {
   const adRef = useRef<HTMLModElement>(null);
+  const impressionSent = useRef(false);
   const config = AD_SLOTS[slotId];
   const provider = getAdProvider();
   const clientId = getAdSenseClientId();
   const customHtml = getCustomAdHtml(slotId);
+
+  // Track ad impression on mount
+  useEffect(() => {
+    if (impressionSent.current) return;
+    impressionSent.current = true;
+    navigator.sendBeacon(
+      "/api/ad-impression",
+      new Blob([JSON.stringify({ slotId })], { type: "application/json" }),
+    );
+  }, [slotId]);
+
+  // Track ad click
+  const handleAdClick = useCallback(() => {
+    navigator.sendBeacon(
+      "/api/ad-click",
+      new Blob([JSON.stringify({ slotId })], { type: "application/json" }),
+    );
+  }, [slotId]);
 
   useEffect(() => {
     if (provider !== "adsense" || !clientId || !config.slotId) return;
@@ -46,7 +65,7 @@ export function AdSlot({ slotId, className }: AdSlotProps) {
   // Custom HTML ads (A8.net, affiliate tags, etc.)
   if (provider === "custom" && customHtml) {
     return (
-      <div className={`ad-container ${className ?? ""}`}>
+      <div className={`ad-container ${className ?? ""}`} onClick={handleAdClick}>
         <div className="ad-label">{config.label}</div>
         <div
           className="ad-custom"
@@ -61,7 +80,7 @@ export function AdSlot({ slotId, className }: AdSlotProps) {
   // AdSense ads
   if (provider === "adsense" && clientId && config.slotId) {
     return (
-      <div className={`ad-container ${className ?? ""}`}>
+      <div className={`ad-container ${className ?? ""}`} onClick={handleAdClick}>
         <div className="ad-label">{config.label}</div>
         <ins
           ref={adRef}
@@ -84,7 +103,7 @@ export function AdSlot({ slotId, className }: AdSlotProps) {
 
   // Development placeholder
   return (
-    <div className={`ad-container ${className ?? ""}`}>
+    <div className={`ad-container ${className ?? ""}`} onClick={handleAdClick}>
       <div className="ad-label">{config.label}</div>
       <div
         className="ad-placeholder"
