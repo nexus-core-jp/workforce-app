@@ -1,3 +1,5 @@
+import { EmptyState } from "@/components/EmptyState";
+
 export function AdminDailyReports(props: {
   items: Array<{
     id: string;
@@ -12,19 +14,21 @@ export function AdminDailyReports(props: {
     <section>
       <h2 style={{ marginBottom: 12 }}>提出済み日報</h2>
       {props.items.length === 0 ? (
-        <p style={{ fontSize: 14, color: "var(--color-text-secondary)" }}>
-          提出された日報はありません
-        </p>
+        <EmptyState
+          icon="📋"
+          title="提出された日報はありません"
+          description="メンバーが日報を提出するとここに表示されます"
+        />
       ) : (
         <div className="table-scroll">
           <table>
             <thead>
               <tr>
-                <th>日付</th>
-                <th>社員</th>
-                <th>ルート</th>
-                <th>件数</th>
-                <th>提出日時</th>
+                <th scope="col">日付</th>
+                <th scope="col">社員</th>
+                <th scope="col">ルート</th>
+                <th scope="col">件数</th>
+                <th scope="col">提出日時</th>
               </tr>
             </thead>
             <tbody>

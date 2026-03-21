@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { PasswordInput } from "@/components/PasswordInput";
 
 export function ChangePasswordForm() {
   const [current, setCurrent] = useState("");
@@ -9,6 +10,9 @@ export function ChangePasswordForm() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [isPending, startTransition] = useTransition();
+
+  const mismatch = confirm.length > 0 && next !== confirm;
+  const tooShort = next.length > 0 && next.length < 8;
 
   const submit = () => {
     setError(null);
@@ -38,29 +42,66 @@ export function ChangePasswordForm() {
     });
   };
 
-  const inputStyle = { padding: "6px 8px", border: "1px solid #ccc", borderRadius: 4 };
-
   return (
-    <section style={{ marginTop: 24 }}>
-      <h2>パスワード変更</h2>
-      <div style={{ display: "grid", gap: 10, maxWidth: 400 }}>
-        <label style={{ display: "grid", gap: 4 }}>
-          現在のパスワード
-          <input type="password" value={current} onChange={(e) => setCurrent(e.target.value)} style={inputStyle} />
-        </label>
-        <label style={{ display: "grid", gap: 4 }}>
-          新しいパスワード（8文字以上）
-          <input type="password" value={next} onChange={(e) => setNext(e.target.value)} style={inputStyle} />
-        </label>
-        <label style={{ display: "grid", gap: 4 }}>
-          新しいパスワード（確認）
-          <input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} style={inputStyle} />
-        </label>
-        <button disabled={isPending || !current || next.length < 8 || !confirm} onClick={submit}>
-          {isPending ? "変更中…" : "変更する"}
+    <section>
+      <h2 style={{ marginBottom: 12 }}>パスワード変更</h2>
+      <div style={{ display: "grid", gap: 16, maxWidth: 400 }}>
+        <div style={{ display: "grid", gap: 6 }}>
+          <label htmlFor="current-pw" style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-secondary)" }}>
+            現在のパスワード
+          </label>
+          <PasswordInput
+            id="current-pw"
+            value={current}
+            onChange={setCurrent}
+            autoComplete="current-password"
+          />
+        </div>
+
+        <div style={{ display: "grid", gap: 6 }}>
+          <label htmlFor="new-pw" style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-secondary)" }}>
+            新しいパスワード（8文字以上）
+          </label>
+          <PasswordInput
+            id="new-pw"
+            value={next}
+            onChange={setNext}
+            autoComplete="new-password"
+          />
+          {tooShort && (
+            <p style={{ fontSize: 12, color: "var(--color-warning)" }}>
+              8文字以上入力してください（現在 {next.length} 文字）
+            </p>
+          )}
+        </div>
+
+        <div style={{ display: "grid", gap: 6 }}>
+          <label htmlFor="confirm-pw" style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-secondary)" }}>
+            新しいパスワード（確認）
+          </label>
+          <PasswordInput
+            id="confirm-pw"
+            value={confirm}
+            onChange={setConfirm}
+            autoComplete="new-password"
+          />
+          {mismatch && (
+            <p style={{ fontSize: 12, color: "var(--color-danger)" }}>
+              パスワードが一致しません
+            </p>
+          )}
+        </div>
+
+        <button
+          disabled={isPending || !current || next.length < 8 || !confirm || mismatch}
+          onClick={submit}
+          data-variant="primary"
+        >
+          {isPending ? "変更中…" : "パスワードを変更"}
         </button>
-        {error ? <p style={{ color: "crimson" }}>エラー: {error}</p> : null}
-        {success ? <p style={{ color: "green" }}>パスワードを変更しました</p> : null}
+
+        {error && <p className="error-text" role="alert">エラー: {error}</p>}
+        {success && <p className="success-text" role="status">パスワードを変更しました</p>}
       </div>
     </section>
   );

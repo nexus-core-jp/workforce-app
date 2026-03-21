@@ -17,36 +17,54 @@ export default function ForgotPasswordPage() {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
+        padding: "1rem",
+        background: "var(--color-bg)",
       }}
     >
       <div
         style={{
           width: "100%",
-          maxWidth: 400,
-          padding: 32,
+          maxWidth: 420,
+          padding: "2.5rem 2rem",
           background: "var(--color-surface)",
           border: "1px solid var(--color-border)",
-          borderRadius: "var(--radius)",
-          boxShadow: "var(--shadow-md)",
+          borderRadius: "var(--radius-xl, 16px)",
+          boxShadow: "var(--shadow-lg)",
         }}
       >
-        <h1 style={{ fontSize: 24, marginBottom: 4 }}><span className="logo"><span className="logo-icon" style={{ width: 32, height: 32, fontSize: 13 }}>WN</span><span className="logo-text">Workforce Nexus</span></span></h1>
+        <h1 style={{ fontSize: 24, marginBottom: 4 }}>
+          <span className="logo">
+            <span className="logo-icon" style={{ width: 32, height: 32, fontSize: 13 }}>WN</span>
+            <span className="logo-text">Workforce Nexus</span>
+          </span>
+        </h1>
         <p style={{ color: "var(--color-text-secondary)", fontSize: 14, marginBottom: 24 }}>
           パスワードをお忘れですか？
         </p>
 
         {sent ? (
-          <div>
-            <p style={{ marginBottom: 16 }}>
-              入力されたメールアドレス宛にパスワードリセットのリンクを送信しました。メールをご確認ください。
-            </p>
-            <p style={{ fontSize: 14 }}>
+          <div role="status">
+            <div
+              style={{
+                padding: "16px",
+                background: "var(--color-success-bg)",
+                borderRadius: "var(--radius)",
+                borderLeft: "3px solid var(--color-success)",
+                marginBottom: 16,
+              }}
+            >
+              <p style={{ fontWeight: 500, marginBottom: 4 }}>メールを送信しました</p>
+              <p style={{ fontSize: 14, color: "var(--color-text-secondary)" }}>
+                入力されたメールアドレス宛にパスワードリセットのリンクを送信しました。メールをご確認ください。
+              </p>
+            </div>
+            <p style={{ fontSize: 14, textAlign: "center" }}>
               <Link href="/login">ログインに戻る</Link>
             </p>
           </div>
         ) : (
           <form
-            style={{ display: "grid", gap: 16 }}
+            style={{ display: "grid", gap: 18 }}
             onSubmit={async (e) => {
               e.preventDefault();
               setError(null);
@@ -69,32 +87,38 @@ export default function ForgotPasswordPage() {
               }
             }}
           >
-            <label style={{ display: "grid", gap: 6 }}>
-              <span>会社ID</span>
+            <div style={{ display: "grid", gap: 6 }}>
+              <label htmlFor="fp-tenant" style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-secondary)" }}>会社ID</label>
               <input
+                id="fp-tenant"
                 value={tenant}
                 onChange={(e) => setTenant(e.target.value)}
                 required
+                disabled={loading}
                 autoComplete="organization"
+                placeholder="例: demo"
               />
-            </label>
+            </div>
 
-            <label style={{ display: "grid", gap: 6 }}>
-              <span>メールアドレス</span>
+            <div style={{ display: "grid", gap: 6 }}>
+              <label htmlFor="fp-email" style={{ fontSize: 13, fontWeight: 500, color: "var(--color-text-secondary)" }}>メールアドレス</label>
               <input
+                id="fp-email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 type="email"
                 required
+                disabled={loading}
                 autoComplete="email"
+                placeholder="you@example.com"
               />
-            </label>
+            </div>
 
-            <button type="submit" data-variant="primary" disabled={loading} style={{ marginTop: 8 }}>
+            <button type="submit" data-variant="primary" disabled={loading} style={{ marginTop: 4 }}>
               {loading ? "送信中..." : "リセットリンクを送信"}
             </button>
 
-            {error ? <p className="error-text" role="alert">{error}</p> : null}
+            {error && <p className="error-text" role="alert">{error}</p>}
 
             <p style={{ fontSize: 14, textAlign: "center" }}>
               <Link href="/login">ログインに戻る</Link>

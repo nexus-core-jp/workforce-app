@@ -102,7 +102,9 @@ export function NotificationBell() {
         className="btn-compact"
         onClick={() => setIsOpen(!isOpen)}
         style={{ position: "relative", minWidth: 36 }}
-        aria-label="通知"
+        aria-label={`通知${unreadCount > 0 ? ` (${unreadCount}件未読)` : ""}`}
+        aria-expanded={isOpen}
+        aria-haspopup="dialog"
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
@@ -133,6 +135,8 @@ export function NotificationBell() {
 
       {isOpen && (
         <div
+          role="dialog"
+          aria-label="通知一覧"
           style={{
             position: "absolute",
             top: "calc(100% + 8px)",
@@ -143,8 +147,9 @@ export function NotificationBell() {
             background: "var(--color-surface)",
             border: "1px solid var(--color-border)",
             borderRadius: "var(--radius)",
-            boxShadow: "var(--shadow-md)",
+            boxShadow: "var(--shadow-lg)",
             zIndex: 100,
+            animation: "fade-in 0.15s ease",
           }}
         >
           <div

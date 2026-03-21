@@ -9,6 +9,7 @@ import { toSessionUser } from "@/lib/session";
 import { addJstDays, formatLocal, startOfJstDay } from "@/lib/time";
 import { calcDailyOvertime, STANDARD_DAILY_MINUTES, MONTHLY_OVERTIME_LIMIT_MINUTES } from "@/lib/overtime";
 import { isFaceAuthAvailable } from "@/lib/face-auth-config";
+import { NavLink } from "@/components/NavLink";
 
 import { Logo } from "../Logo";
 import { DailyReportPanel } from "./DailyReportPanel";
@@ -191,43 +192,41 @@ export default async function DashboardPage() {
       <main className="page-container">
         {/* Admin link */}
         {isAdmin && (
-          <nav style={{ marginBottom: 8, display: "flex", gap: 12, flexWrap: "wrap" }}>
-            <Link href="/admin" style={{ fontWeight: 500 }}>
-              管理画面 →
-            </Link>
-            {role === "ADMIN" && <Link href="/admin/users">ユーザー管理</Link>}
-            {role === "ADMIN" && <Link href="/admin/departments">部署管理</Link>}
-            {role === "ADMIN" && <Link href="/admin/shifts">シフト管理</Link>}
-            {role === "ADMIN" && <Link href="/admin/audit-logs">監査ログ</Link>}
+          <nav style={{ marginBottom: 8, display: "flex", gap: 4, flexWrap: "wrap" }} aria-label="管理メニュー">
+            <NavLink href="/admin">管理画面</NavLink>
+            <NavLink href="/admin/users">ユーザー管理</NavLink>
+            <NavLink href="/admin/departments">部署管理</NavLink>
+            <NavLink href="/admin/shifts">シフト管理</NavLink>
+            <NavLink href="/admin/audit-logs">監査ログ</NavLink>
           </nav>
         )}
 
-        <section>
+        <section aria-label="今日の打刻記録">
           <h2 style={{ marginBottom: 12 }}>今日の打刻</h2>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 12 }}>
-            <div>
-              <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>出勤</div>
-              <div style={{ fontSize: 16, fontWeight: 600 }}>{formatLocal(clockInAt)}</div>
+            <div className="stat-card">
+              <div className="stat-label">出勤</div>
+              <div style={{ fontSize: 16, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{formatLocal(clockInAt)}</div>
             </div>
-            <div>
-              <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>休憩開始</div>
-              <div style={{ fontSize: 16, fontWeight: 600 }}>{formatLocal(breakStartAt)}</div>
+            <div className="stat-card">
+              <div className="stat-label">休憩開始</div>
+              <div style={{ fontSize: 16, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{formatLocal(breakStartAt)}</div>
             </div>
-            <div>
-              <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>休憩終了</div>
-              <div style={{ fontSize: 16, fontWeight: 600 }}>{formatLocal(breakEndAt)}</div>
+            <div className="stat-card">
+              <div className="stat-label">休憩終了</div>
+              <div style={{ fontSize: 16, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{formatLocal(breakEndAt)}</div>
             </div>
-            <div>
-              <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>退勤</div>
-              <div style={{ fontSize: 16, fontWeight: 600 }}>{formatLocal(clockOutAt)}</div>
+            <div className="stat-card">
+              <div className="stat-label">退勤</div>
+              <div style={{ fontSize: 16, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{formatLocal(clockOutAt)}</div>
             </div>
-            <div>
-              <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>労働時間</div>
-              <div style={{ fontSize: 16, fontWeight: 600 }}>{entry?.workMinutes ?? 0} 分</div>
+            <div className="stat-card">
+              <div className="stat-label">労働時間</div>
+              <div style={{ fontSize: 16, fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>{entry?.workMinutes ?? 0} 分</div>
             </div>
-            <div>
-              <div style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>今月残業</div>
-              <div style={{ fontSize: 16, fontWeight: 600, color: overtimePercentage >= 80 ? "var(--color-danger)" : overtimePercentage >= 50 ? "var(--color-warning)" : undefined }}>
+            <div className="stat-card">
+              <div className="stat-label">今月残業</div>
+              <div style={{ fontSize: 16, fontWeight: 600, fontVariantNumeric: "tabular-nums", color: overtimePercentage >= 80 ? "var(--color-danger)" : overtimePercentage >= 50 ? "var(--color-warning)" : undefined }}>
                 {Math.floor(monthlyOvertimeMinutes / 60)}h{monthlyOvertimeMinutes % 60}m
                 {overtimePercentage >= 80 && <span style={{ fontSize: 11, marginLeft: 4 }}>({overtimePercentage}% 要注意)</span>}
                 {overtimePercentage >= 50 && overtimePercentage < 80 && <span style={{ fontSize: 11, marginLeft: 4 }}>({overtimePercentage}%)</span>}

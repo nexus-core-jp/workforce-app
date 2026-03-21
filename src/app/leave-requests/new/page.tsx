@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { toSessionUser } from "@/lib/session";
+import { Breadcrumb } from "@/components/NavLink";
 
 import { LeaveRequestForm } from "./LeaveRequestForm";
 
@@ -32,14 +32,17 @@ export default async function NewLeaveRequestPage() {
 
   return (
     <main className="page-container">
+      <Breadcrumb
+        items={[
+          { label: "ダッシュボード", href: "/dashboard" },
+          { label: "休暇申請", href: "/leave-requests" },
+          { label: "新規申請" },
+        ]}
+      />
+
       <h1 style={{ marginBottom: 16 }}>休暇申請（新規）</h1>
 
       <LeaveRequestForm balance={balance} />
-
-      <div style={{ marginTop: 16, display: "flex", gap: 12 }}>
-        <Link href="/leave-requests">&larr; 申請一覧</Link>
-        <Link href="/dashboard">ダッシュボード</Link>
-      </div>
     </main>
   );
 }

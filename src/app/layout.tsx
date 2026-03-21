@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ServiceWorkerRegister } from "./ServiceWorkerRegister";
+import { ToastProvider } from "@/components/Toast";
 
 export const metadata: Metadata = {
   title: "Workforce Nexus - 勤怠管理",
@@ -44,7 +45,9 @@ export default function RootLayout({
         <link rel="apple-touch-icon" href="/icon-192.png" />
       </head>
       <body>
-        {children}
+        <ToastProvider>
+          {children}
+        </ToastProvider>
         <ServiceWorkerRegister />
       </body>
     </html>

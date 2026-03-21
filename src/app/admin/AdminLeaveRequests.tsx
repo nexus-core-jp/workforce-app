@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { EmptyState } from "@/components/EmptyState";
 
 interface LeaveRequestItem {
   id: string;
@@ -53,19 +54,21 @@ export function AdminLeaveRequests({ items }: { items: LeaveRequestItem[] }) {
         )}
       </h2>
       {items.length === 0 ? (
-        <p style={{ fontSize: 14, color: "var(--color-text-secondary)" }}>
-          未処理の休暇申請はありません。
-        </p>
+        <EmptyState
+          icon="✓"
+          title="未処理の休暇申請はありません"
+          description="新しい休暇申請が届くとここに表示されます"
+        />
       ) : (
         <div className="table-scroll">
           <table>
             <thead>
               <tr>
-                <th>申請者</th>
-                <th>種別</th>
-                <th>期間</th>
-                <th>理由</th>
-                <th>操作</th>
+                <th scope="col">申請者</th>
+                <th scope="col">種別</th>
+                <th scope="col">期間</th>
+                <th scope="col">理由</th>
+                <th scope="col">操作</th>
               </tr>
             </thead>
             <tbody>
@@ -87,6 +90,7 @@ export function AdminLeaveRequests({ items }: { items: LeaveRequestItem[] }) {
                         data-variant="success"
                         disabled={isPending}
                         onClick={() => decide(item.id, "APPROVED")}
+                        aria-label={`${item.userLabel}の休暇申請を承認`}
                       >
                         承認
                       </button>
@@ -95,6 +99,7 @@ export function AdminLeaveRequests({ items }: { items: LeaveRequestItem[] }) {
                         data-variant="danger"
                         disabled={isPending}
                         onClick={() => decide(item.id, "REJECTED")}
+                        aria-label={`${item.userLabel}の休暇申請を却下`}
                       >
                         却下
                       </button>
@@ -106,7 +111,7 @@ export function AdminLeaveRequests({ items }: { items: LeaveRequestItem[] }) {
           </table>
         </div>
       )}
-      {error ? <p className="error-text">エラー: {error}</p> : null}
+      {error && <p className="error-text" role="alert">エラー: {error}</p>}
     </section>
   );
 }

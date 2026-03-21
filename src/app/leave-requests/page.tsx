@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { toSessionUser } from "@/lib/session";
+import { Breadcrumb } from "@/components/NavLink";
+import { EmptyState } from "@/components/EmptyState";
 
 const TYPE_LABELS: Record<string, string> = {
   PAID: "有給休暇",
@@ -59,13 +61,23 @@ export default async function LeaveRequestsPage() {
 
   return (
     <main className="page-container">
+      <Breadcrumb
+        items={[
+          { label: "ダッシュボード", href: "/dashboard" },
+          { label: "休暇申請" },
+        ]}
+      />
+
       <h1 style={{ marginBottom: 16 }}>休暇申請</h1>
 
       <section>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
           <div>
             <span style={{ fontSize: 13, color: "var(--color-text-secondary)" }}>有休残日数: </span>
-            <span style={{ fontSize: 20, fontWeight: 700, color: balance <= 2 ? "var(--color-danger)" : "var(--color-success)" }}>
+            <span
+              style={{ fontSize: 20, fontWeight: 700, color: balance <= 2 ? "var(--color-danger)" : "var(--color-success)" }}
+              aria-label={`有給休暇残り${balance}日`}
+            >
               {balance} 日
             </span>
           </div>
@@ -78,19 +90,23 @@ export default async function LeaveRequestsPage() {
       <section>
         <h2 style={{ marginBottom: 12 }}>申請履歴</h2>
         {requests.length === 0 ? (
-          <p style={{ fontSize: 14, color: "var(--color-text-secondary)" }}>
-            まだ休暇申請はありません。
-          </p>
+          <EmptyState
+            icon="🏖️"
+            title="まだ休暇申請はありません"
+            description="休暇を取得するには新規申請を行ってください"
+            actionLabel="新規申請"
+            actionHref="/leave-requests/new"
+          />
         ) : (
           <div className="table-scroll">
             <table>
               <thead>
                 <tr>
-                  <th>種別</th>
-                  <th>期間</th>
-                  <th>理由</th>
-                  <th>状態</th>
-                  <th>申請日</th>
+                  <th scope="col">種別</th>
+                  <th scope="col">期間</th>
+                  <th scope="col">理由</th>
+                  <th scope="col">状態</th>
+                  <th scope="col">申請日</th>
                 </tr>
               </thead>
               <tbody>
@@ -118,10 +134,6 @@ export default async function LeaveRequestsPage() {
           </div>
         )}
       </section>
-
-      <div style={{ marginTop: 16 }}>
-        <Link href="/dashboard">&larr; ダッシュボードに戻る</Link>
-      </div>
     </main>
   );
 }

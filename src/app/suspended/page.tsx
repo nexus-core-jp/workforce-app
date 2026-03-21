@@ -29,23 +29,49 @@ export default async function SuspendedPage() {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
+        padding: "1rem",
+        background: "var(--color-bg)",
       }}
     >
       <div
         style={{
           width: "100%",
           maxWidth: 440,
-          padding: 32,
+          padding: "2.5rem 2rem",
           background: "var(--color-surface)",
           border: "1px solid var(--color-border)",
-          borderRadius: "var(--radius)",
-          boxShadow: "var(--shadow-md)",
+          borderRadius: "var(--radius-xl, 16px)",
+          boxShadow: "var(--shadow-lg)",
           textAlign: "center",
         }}
       >
-        <h1 style={{ fontSize: 24, marginBottom: 12 }}><span className="logo"><span className="logo-icon" style={{ width: 32, height: 32, fontSize: 13 }}>WN</span><span className="logo-text">Workforce Nexus</span></span></h1>
+        <h1 style={{ fontSize: 24, marginBottom: 16 }}>
+          <span className="logo">
+            <span className="logo-icon" style={{ width: 32, height: 32, fontSize: 13 }}>WN</span>
+            <span className="logo-text">Workforce Nexus</span>
+          </span>
+        </h1>
+
+        <div
+          style={{
+            width: 56,
+            height: 56,
+            borderRadius: "50%",
+            background: "var(--color-error-bg)",
+            color: "var(--color-danger)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 28,
+            margin: "0 auto 16px",
+          }}
+          aria-hidden="true"
+        >
+          ⚠
+        </div>
+
         <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 12 }}>アカウント停止中</h2>
-        <p style={{ color: "var(--color-text-secondary)", marginBottom: 16 }}>
+        <p style={{ color: "var(--color-text-secondary)", marginBottom: 16, lineHeight: 1.6 }}>
           お客様のアカウントは現在停止されています。
           <br />
           お支払い状況をご確認の上、管理者にお問い合わせください。
@@ -59,7 +85,7 @@ export default async function SuspendedPage() {
             await logoutWithAudit();
           }}
         >
-          <button type="submit" data-variant="primary">
+          <button type="submit" data-variant="primary" style={{ width: "100%" }}>
             ログアウト
           </button>
         </form>
