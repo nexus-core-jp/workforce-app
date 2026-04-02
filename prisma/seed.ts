@@ -16,8 +16,8 @@ async function main() {
     );
   }
 
-  const superPassword = process.env.SEED_SUPER_PASSWORD || generatePassword();
-  const demoPassword = process.env.SEED_DEMO_PASSWORD || generatePassword();
+  const superPassword = process.env.SEED_SUPER_PASSWORD || "superadmin123";
+  const demoPassword = process.env.SEED_DEMO_PASSWORD || "password123";
 
   const superHash = await bcrypt.hash(superPassword, 10);
   const demoHash = await bcrypt.hash(demoPassword, 10);
@@ -42,13 +42,12 @@ async function main() {
   });
 
   // --- Demo tenant ---
-  const trialEndsAt = new Date();
-  trialEndsAt.setDate(trialEndsAt.getDate() + 30);
-
+  // Use ACTIVE plan so the demo tenant never expires and locks users out.
+  // Real tenants start as TRIAL via the registration flow.
   const tenant = await prisma.tenant.upsert({
     where: { slug: "demo" },
-    update: { name: "Demo", plan: "TRIAL", trialEndsAt },
-    create: { name: "Demo", slug: "demo", plan: "TRIAL", trialEndsAt },
+    update: { name: "Demo", plan: "ACTIVE", trialEndsAt: null },
+    create: { name: "Demo", slug: "demo", plan: "ACTIVE" },
   });
 
   await prisma.user.upsert({
@@ -87,7 +86,7 @@ async function main() {
   console.log("  従業員: tanaka@demo.local");
   console.log(`  PW:     ${demoPassword}`);
   console.log("");
-  console.log("⚠ このパスワードは初回のみ表示されます。安全に保管してください。");
+  console.log("💡 パスワードを変更するには SEED_SUPER_PASSWORD / SEED_DEMO_PASSWORD 環境変数を設定して再実行してください。");
 }
 
 main()

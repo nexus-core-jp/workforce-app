@@ -2,10 +2,7 @@
 
 import { useState } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
-
 export default function SuperAdminLoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -61,8 +58,9 @@ export default function SuperAdminLoginPage() {
                   setError("メールアドレスまたはパスワードが正しくありません");
                 }
               } else {
-                router.push("/super-admin");
-                router.refresh();
+                // Full page navigation ensures the new session cookie is picked up
+                window.location.href = "/super-admin";
+                return; // prevent finally from resetting loading state
               }
             } catch {
               setError("ネットワークエラーが発生しました。接続を確認してください。");

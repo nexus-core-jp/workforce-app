@@ -31,39 +31,52 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid input" }, { status: 400 });
   }
 
-  // Check if already linked
-  const existing = await prisma.account.findFirst({
-    where: { userId: user.id, provider: "line" },
-  });
-  if (existing) {
+  // Check if already linked (either via Account or User.lineId)
+  const [existingAccount, currentUser] = await Promise.all([
+    prisma.account.findFirst({ where: { userId: user.id, provider: "line" } }),
+    prisma.user.findUnique({ where: { id: user.id }, select: { lineId: true } }),
+  ]);
+  if (existingAccount || currentUser?.lineId) {
     return NextResponse.json({ error: "LINE アカウントは既に連携済みです" }, { status: 409 });
   }
 
-  // Check if this LINE account is linked to another user
-  const otherUser = await prisma.account.findUnique({
-    where: {
-      provider_providerAccountId: {
-        provider: "line",
-        providerAccountId: parsed.data.providerAccountId,
+  // Check if this LINE account is linked to another user (via Account or User.lineId)
+  const [otherAccount, otherLineUser] = await Promise.all([
+    prisma.account.findUnique({
+      where: {
+        provider_providerAccountId: {
+          provider: "line",
+          providerAccountId: parsed.data.providerAccountId,
+        },
       },
-    },
-  });
-  if (otherUser) {
+    }),
+    prisma.user.findFirst({
+      where: { lineId: parsed.data.providerAccountId, NOT: { id: user.id } },
+    }),
+  ]);
+  if (otherAccount || otherLineUser) {
     return NextResponse.json(
       { error: "この LINE アカウントは別のユーザーに連携されています" },
       { status: 409 },
     );
   }
 
-  await prisma.account.create({
-    data: {
-      userId: user.id,
-      type: "oauth",
-      provider: "line",
-      providerAccountId: parsed.data.providerAccountId,
-      access_token: parsed.data.accessToken,
-    },
-  });
+  // Sync both Account record and User.lineId
+  await prisma.$transaction([
+    prisma.account.create({
+      data: {
+        userId: user.id,
+        type: "oauth",
+        provider: "line",
+        providerAccountId: parsed.data.providerAccountId,
+        access_token: parsed.data.accessToken,
+      },
+    }),
+    prisma.user.update({
+      where: { id: user.id },
+      data: { lineId: parsed.data.providerAccountId },
+    }),
+  ]);
 
   await prisma.auditLog.create({
     data: {
@@ -91,6 +104,7 @@ export async function DELETE() {
     return NextResponse.json({ error: "Invalid session" }, { status: 401 });
   }
 
+  // Sync both Account record and User.lineId
   const deleted = await prisma.account.deleteMany({
     where: { userId: user.id, provider: "line" },
   });
@@ -98,6 +112,11 @@ export async function DELETE() {
   if (deleted.count === 0) {
     return NextResponse.json({ error: "LINE 連携がありません" }, { status: 404 });
   }
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { lineId: null },
+  });
 
   await prisma.auditLog.create({
     data: {

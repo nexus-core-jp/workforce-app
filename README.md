@@ -26,10 +26,11 @@
 6. [環境変数リファレンス](#環境変数リファレンス)
 7. [Stripe 課金セットアップ](#stripe-課金セットアップ)
 8. [運用マニュアル](#運用マニュアル)
-9. [API リファレンス](#api-リファレンス)
-10. [データベース](#データベース)
-11. [プロジェクト構成](#プロジェクト構成)
-12. [スクリプト一覧](#スクリプト一覧)
+9. [信頼性・安全対策](#信頼性安全対策)
+10. [API リファレンス](#api-リファレンス)
+11. [データベース](#データベース)
+12. [プロジェクト構成](#プロジェクト構成)
+13. [スクリプト一覧](#スクリプト一覧)
 
 ---
 
@@ -151,10 +152,11 @@ npm run dev
 |--------|---------|--------|-----------|----------------|
 | Super Admin | `__platform` | `super@platform.local` | `superadmin123` | `/super-admin` |
 | 管理者 (ADMIN) | `demo` | `admin@demo.local` | `password123` | `/admin` |
-| 管理者 (ADMIN) | `demo` | `suzuki@demo.local` | `password123` | `/dashboard` |
 | 従業員 (EMPLOYEE) | `demo` | `tanaka@demo.local` | `password123` | `/dashboard` |
 
-> Stripe / Resend は任意です。`.env` の `STRIPE_*` / `RESEND_*` を空のままにすればスキップされます。
+> - パスワードは環境変数 `SEED_DEMO_PASSWORD` / `SEED_SUPER_PASSWORD` で変更可能です。
+> - デモテナントは **ACTIVE プラン** で作成されるため、トライアル期限切れは発生しません。
+> - Stripe / Resend は任意です。`.env` の `STRIPE_*` / `RESEND_*` を空のままにすればスキップされます。
 
 ---
 
@@ -205,11 +207,13 @@ npm run dev
 1. [vercel.com](https://vercel.com) でリポジトリをインポート
 2. **Environment Variables** に以下を設定:
 
-   | 変数 | 値 |
-   |------|-----|
-   | `DATABASE_URL` | Neon の接続文字列 |
-   | `AUTH_SECRET` | `openssl rand -base64 32` で生成した文字列 |
-   | `AUTH_URL` | Vercel のデプロイ URL (例: `https://your-app.vercel.app`) |
+   | 変数 | 値 | 備考 |
+   |------|-----|------|
+   | `DATABASE_URL` | Neon の接続文字列 | テンプレートのままだとビルドが失敗します |
+   | `AUTH_SECRET` | `openssl rand -base64 32` で生成した文字列 | 32文字未満だとビルドが失敗します |
+   | `AUTH_URL` | Vercel のデプロイ URL (例: `https://your-app.vercel.app`) | |
+   | `CRON_SECRET` | Vercel Settings > Cron Jobs で確認 | ヘルスチェック Cron 用 |
+   | `SLACK_ALERT_WEBHOOK_URL` | Slack Incoming Webhook URL | 任意: 障害時の通知先 |
 
 3. **Deploy** をクリック
 
@@ -241,8 +245,10 @@ npm run db:seed
 curl https://your-app.vercel.app/api/health
 
 # 期待されるレスポンス
-# {"status":"ok","timestamp":"...","database":"connected"}
+# {"status":"ok","timestamp":"...","checks":{"database":"ok","tenants":"ok","auth_secret":"ok"}}
 ```
+
+> ビルド時に `scripts/check-db.ts` が自動実行され、DB接続不可やテンプレートのままの `DATABASE_URL` を検出するとデプロイが中止されます。
 
 #### Step 5 (任意): カスタムドメイン
 
@@ -289,6 +295,10 @@ Node.js 20+ と PostgreSQL が必要です。
 | `LINE_CHANNEL_SECRET` | 任意 | LINE Bot チャネルシークレット | |
 | `LINE_CHANNEL_ACCESS_TOKEN` | 任意 | LINE Bot チャネルアクセストークン | |
 | `LINE_NOTIFY_TOKEN` | 任意 | LINE Notify トークン | |
+| `CRON_SECRET` | 任意 | Vercel Cron ジョブの認証シークレット | Vercel が自動生成 |
+| `SLACK_ALERT_WEBHOOK_URL` | 任意 | ヘルスチェック失敗時の Slack 通知先 | `https://hooks.slack.com/...` |
+| `SEED_DEMO_PASSWORD` | 任意 | シード時のデモアカウントパスワード (未設定: `password123`) | |
+| `SEED_SUPER_PASSWORD` | 任意 | シード時の SA パスワード (未設定: `superadmin123`) | |
 
 > `STRIPE_*` を設定しない場合、課金ボタンは「Stripe is not configured」エラーを返します。課金なしでも勤怠機能は使えます。
 
@@ -471,14 +481,90 @@ SA は `__platform` テナントの `SUPER_ADMIN` ロールのユーザーです
 
 ### トラブルシューティング
 
+#### ログインに関する問題
+
 | 症状 | 原因 | 対処法 |
 |------|------|--------|
-| ログインできない | 会社 ID / メール / パスワードが間違い | 3 項目全て確認。退社済み (active=false) ユーザーはログイン不可 |
-| 「アカウントが停止されています」 | テナントが SUSPENDED | SA にプラン復帰を依頼 or `/admin/billing` で再サブスクライブ |
+| ログインできない (全ユーザー) | `DATABASE_URL` が未設定またはテンプレートのまま | `.env` を確認。`npm run db:check` でDB接続をテスト |
+| ログインできない (全ユーザー) | DBにデモデータが未投入 | `npm run db:seed` を実行 |
+| ログインできない (特定ユーザー) | 会社 ID / メール / パスワードが間違い | 3 項目全て確認。会社IDは大文字小文字を区別します |
+| ログインできない (特定ユーザー) | ユーザーが退社済み (`active=false`) | SA または ADMIN がメンバー管理から「復帰」操作 |
+| 「サーバーに一時的な問題が発生しています」 | DB接続エラー | `npm run db:check` で接続を確認。Neon の場合はコンソールでDB状態を確認 |
+| 「ログイン試行回数が上限を超えました」 | レート制限 (10回/15分) | 15分待つ。または DB の `RateLimitEntry` テーブルの該当レコードを削除 |
+| ログイン後すぐ `/suspended` に飛ばされる | テナントが SUSPENDED | SA にプラン復帰を依頼 or `/admin/billing` で再サブスクライブ |
+| ログイン後すぐ `/suspended` に飛ばされる | トライアル期限切れ | SA がプランを ACTIVE に変更 or Stripe で決済 |
+| 2FA コード入力画面が出る | TOTP が有効化されている | 認証アプリ (Google Authenticator 等) のコードを入力 |
+
+#### デプロイ・運用に関する問題
+
+| 症状 | 原因 | 対処法 |
+|------|------|--------|
+| Vercel ビルドが失敗する | `DATABASE_URL` がテンプレートのまま | Vercel Environment Variables で正しい接続文字列を設定 |
+| Vercel ビルドが失敗する | DB に接続できない | Neon コンソールでDBが起動しているか確認。IP 制限がある場合は Vercel の IP を許可 |
+| `/api/health` が 503 を返す | DB接続 or AUTH_SECRET の問題 | レスポンスの `checks` と `errors` フィールドで詳細を確認 |
 | パスワードリセットメールが届かない | `RESEND_API_KEY` 未設定 or メールドメイン未認証 | `.env` の設定を確認。Resend で送信元ドメインを認証 |
 | Stripe 決済後もプランが TRIAL のまま | Webhook が届いていない | Stripe ダッシュボードの Webhooks ログを確認。`STRIPE_WEBHOOK_SECRET` を確認 |
 | 打刻ボタンが押せない | 月が締め済み or 既にその状態 | 管理者に締め解除を依頼。or ステートマシンの順序を確認 |
 | CSV が文字化けする | Excel の読み込み設定 | BOM 付き UTF-8 で出力されているので通常は問題なし。古い Excel では「データの取得」→「テキスト/CSV」を使用 |
+
+---
+
+## 信頼性・安全対策
+
+本アプリでは「ログインできない」「サービスが使えない」を防ぐため、複数レイヤーで安全対策を実装しています。
+
+### 1. ビルド時バリデーション (デプロイゲート)
+
+**壊れた設定のままデプロイされることを防止します。**
+
+| チェック | ファイル | タイミング |
+|---------|---------|-----------|
+| `DATABASE_URL` がテンプレートのままでないか | `src/lib/env.ts` | アプリ起動時 |
+| `DATABASE_URL` が `postgresql://` で始まるか | `src/lib/env.ts` | アプリ起動時 |
+| `AUTH_SECRET` が 32 文字以上あるか | `src/lib/env.ts` + `src/auth.ts` | アプリ起動時 |
+| DB に実際に接続できるか | `scripts/check-db.ts` | Vercel ビルド時 |
+| テナントデータが存在するか | `scripts/check-db.ts` | Vercel ビルド時 |
+
+> DB 接続チェックはビルドコマンドに組み込まれており (`vercel.json`)、失敗するとデプロイが中止されます。
+
+### 2. 定期ヘルスチェック (Vercel Cron)
+
+**デプロイ後の障害を10分以内に検知します。**
+
+- **エンドポイント**: `GET /api/cron/health` (10分間隔)
+- **チェック項目**: DB接続 / テナント存在 / AUTH_SECRET 設定 / トライアル期限切れの検知
+- **障害通知**: `SLACK_ALERT_WEBHOOK_URL` 設定時に Slack へ自動通知
+- **手動確認**: `GET /api/health` で DB・テナント・AUTH の 3 項目を即座に確認可能
+
+### 3. ログインエラーの分類
+
+**ユーザーが適切に対処できるよう、エラーを区別します。**
+
+| エラー | 原因 | ユーザーへの表示 |
+|--------|------|-----------------|
+| 認証失敗 | 会社ID / メール / パスワードの誤り | 「会社ID、メールアドレス、またはパスワードが正しくありません」 |
+| サービス障害 | DB接続エラー | 「サーバーに一時的な問題が発生しています」 |
+| レート制限 | 10回/15分を超過 | 「ログイン試行回数が上限を超えました。15分後にお試しください」 |
+| 2FA 要求 | TOTP が有効 | 認証コード入力フィールドを表示 |
+| 2FA 不正 | コード間違い | 「認証コードが正しくありません」 |
+
+### 4. テナントプラン保護
+
+**SUSPENDED またはトライアル期限切れのテナントは、ページ表示 (`proxy.ts`) と API 呼び出し (`tenant-guard.ts`) の両方でブロックされます。**
+
+- proxy ミドルウェア: ログイン後のページ遷移時に `/suspended` へリダイレクト
+- API ガード: データ変更 API で `403` を返却
+- JWT リフレッシュ: プランと `trialEndsAt` を毎リクエストで DB から再取得し、SA の変更を即時反映
+- Cron 監視: トライアル期限が 7 日以内 / 期限切れのテナントを検知して Slack 通知
+
+### 5. seed のべき等性
+
+**`npm run db:seed` は何度実行しても安全です (upsert)。**
+
+- デフォルトパスワード: `password123` (デモ) / `superadmin123` (SA)
+- 環境変数 `SEED_DEMO_PASSWORD` / `SEED_SUPER_PASSWORD` で上書き可能
+- デモテナントは **ACTIVE プラン** で作成されるため、トライアル期限切れは発生しません
+- 本番環境 (`NODE_ENV=production`) では実行が拒否されます
 
 ---
 
@@ -531,13 +617,14 @@ SA は `__platform` テナントの `SUPER_ADMIN` ロールのユーザーです
 |---------|--------------|------|------|
 | POST | `/api/super-admin/tenants/[id]/plan` | プラン変更 | SUPER_ADMIN |
 
-### ヘルスチェック
+### ヘルスチェック・監視
 
 | メソッド | エンドポイント | 説明 | 権限 |
 |---------|--------------|------|------|
-| GET | `/api/health` | ヘルスチェック | 不要 |
+| GET | `/api/health` | ヘルスチェック (DB接続 + テナント存在 + AUTH設定) | 不要 |
+| GET | `/api/cron/health` | 定期ヘルスチェック (10分間隔, Vercel Cron) | `CRON_SECRET` |
 
-> 全ての data-mutating API は SUSPENDED テナントからの呼び出しを `403` で拒否します。
+> 全ての data-mutating API は SUSPENDED またはトライアル期限切れテナントからの呼び出しを `403` で拒否します。
 
 ---
 
@@ -631,6 +718,7 @@ workforce-app/
 | `npm run prisma:generate` | Prisma クライアント生成 |
 | `npm run prisma:migrate` | マイグレーション実行 |
 | `npm run prisma:studio` | Prisma Studio (DB GUI) |
+| `npm run db:check` | DB 接続 & テナント存在チェック |
 | `npm run db:seed` | デモデータ投入 |
 
 ---

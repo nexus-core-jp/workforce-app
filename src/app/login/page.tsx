@@ -22,7 +22,7 @@ export default function LoginPage() {
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [tenant, setTenant] = useState("demo");
+  const [tenant, setTenant] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [totpCode, setTotpCode] = useState("");
@@ -98,6 +98,8 @@ function LoginForm() {
                   setError(null);
                 } else if (res.error.includes("TOTP_INVALID")) {
                   setError("認証コードが正しくありません");
+                } else if (res.error.includes("SERVICE_UNAVAILABLE")) {
+                  setError("サーバーに一時的な問題が発生しています。しばらくしてから再度お試しください。");
                 } else {
                   setError("会社ID（会社登録時の英数字ID）、メールアドレス、またはパスワードが正しくありません");
                 }
@@ -203,23 +205,6 @@ function LoginForm() {
         >
           LINEでログイン
         </button>
-
-        {/* Demo account info */}
-        <div style={{
-          marginTop: 20,
-          padding: "14px 16px",
-          background: "var(--color-bg)",
-          border: "1px solid var(--color-border)",
-          borderRadius: 8,
-        }}>
-          <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: "var(--color-text-secondary)" }}>
-            デモアカウント（会社ID: demo）
-          </p>
-          <div style={{ display: "grid", gap: 4, fontSize: 12, fontFamily: "monospace", color: "var(--color-text-secondary)" }}>
-            <div>管理者: admin@demo.local / Demo1234</div>
-            <div>従業員: tanaka@demo.local / Demo1234</div>
-          </div>
-        </div>
 
         <p style={{ marginTop: 16, fontSize: 14, textAlign: "center" }}>
           <Link href="/forgot-password">パスワードをお忘れですか？</Link>

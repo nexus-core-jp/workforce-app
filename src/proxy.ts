@@ -53,6 +53,6 @@ export async function proxy(req: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon\\.ico|icon-.*|manifest\\.json|api/auth|api/line|api/stripe/webhook|api/payjp/webhook|api/health|login|register|forgot-password|reset-password|verify-email|suspended).*)",
+    "/((?!_next/static|_next/image|favicon\\.ico|icon-.*|manifest\\.json|api/auth|api/line|api/stripe/webhook|api/payjp/webhook|api/health|api/cron|login|register|forgot-password|reset-password|verify-email|suspended|super-admin/login).*)",
   ],
 };

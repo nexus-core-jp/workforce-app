@@ -6,9 +6,24 @@ import { z } from "zod";
  * instrumentation hook so that invalid deployments surface immediately.
  */
 
+/** Reject common template / placeholder patterns that indicate unconfigured env */
+const realConnectionString = z
+  .string()
+  .min(1, "DATABASE_URL is required")
+  .refine(
+    (v) => !v.includes("USER:PASSWORD") && !v.includes("ep-xxx"),
+    "DATABASE_URL is still a template placeholder — set a real connection string",
+  )
+  .refine(
+    (v) => v.startsWith("postgresql://") || v.startsWith("postgres://"),
+    "DATABASE_URL must start with postgresql:// or postgres://",
+  );
+
 const envSchema = z.object({
-  DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
-  AUTH_SECRET: z.string().min(1, "AUTH_SECRET is required"),
+  DATABASE_URL: realConnectionString,
+  AUTH_SECRET: z
+    .string()
+    .min(32, "AUTH_SECRET must be at least 32 characters. Generate with: openssl rand -base64 48"),
   AUTH_URL: z.string().url().optional(),
 
   // LINE Login — optional

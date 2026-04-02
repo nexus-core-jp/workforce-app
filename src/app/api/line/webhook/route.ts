@@ -66,17 +66,24 @@ function computeWorkMinutes(entry: {
 }
 
 async function handlePunch(lineUserId: string, action: PunchAction): Promise<string> {
-  // Find user by LINE account
+  // Find user by LINE account (check both Account table and User.lineId)
   const account = await prisma.account.findFirst({
     where: { provider: "line", providerAccountId: lineUserId },
     include: { user: true },
   });
 
-  if (!account?.user) {
-    return "LINEアカウントが未連携です。Webからログインしてアカウントを連携してください。";
+  let user = account?.user ?? null;
+
+  // Fallback: check User.lineId directly (for users registered via LINE)
+  if (!user) {
+    user = await prisma.user.findFirst({
+      where: { lineId: lineUserId, active: true },
+    });
   }
 
-  const user = account.user;
+  if (!user) {
+    return "LINEアカウントが未連携です。Webからログインしてアカウントを連携してください。";
+  }
   const today = startOfJstDay(new Date());
   const now = new Date();
 

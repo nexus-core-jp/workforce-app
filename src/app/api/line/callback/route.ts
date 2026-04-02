@@ -160,6 +160,16 @@ async function handleRegister(
       },
     });
 
+    // Also create Account record so LINE webhook punch works
+    await tx.account.create({
+      data: {
+        userId: adminUser.id,
+        type: "oauth",
+        provider: "line",
+        providerAccountId: lineId,
+      },
+    });
+
     await tx.auditLog.create({
       data: {
         tenantId: tenant.id,

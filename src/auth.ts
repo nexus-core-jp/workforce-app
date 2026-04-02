@@ -43,12 +43,21 @@ const providers: Provider[] = [
       const { limited } = await rateLimit(`login:${tenant}:${email}`, 10, 15 * 60 * 1000);
       if (limited) throw new Error("RATE_LIMITED");
 
-      const dbTenant = await prisma.tenant.findUnique({ where: { slug: tenant } });
-      if (!dbTenant) return null;
+      // Wrap DB queries so a connection failure surfaces as a distinct error
+      let dbTenant;
+      let user;
+      try {
+        dbTenant = await prisma.tenant.findUnique({ where: { slug: tenant } });
+        if (!dbTenant) return null;
 
-      const user = await prisma.user.findUnique({
-        where: { tenantId_email: { tenantId: dbTenant.id, email } },
-      });
+        user = await prisma.user.findUnique({
+          where: { tenantId_email: { tenantId: dbTenant.id, email } },
+        });
+      } catch (err) {
+        logger.error("login.db_error", { tenant, email }, err as Error);
+        throw new Error("SERVICE_UNAVAILABLE");
+      }
+
       if (!user?.active) return null;
       if (!user.passwordHash) return null;
 
@@ -110,6 +119,7 @@ const providers: Provider[] = [
         role: user.role,
         departmentId: user.departmentId,
         plan: dbTenant.plan,
+        trialEndsAt: dbTenant.trialEndsAt?.toISOString() ?? null,
       };
     },
   }),
@@ -205,18 +215,19 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         }
       }
 
-      // Refresh plan from DB on every request to catch SA plan changes immediately
+      // Refresh plan + trialEndsAt from DB on every request to catch SA plan changes immediately
       if (token.tenantId && token.role !== "SUPER_ADMIN") {
         try {
           const tenant = await prisma.tenant.findUnique({
             where: { id: token.tenantId as string },
-            select: { plan: true },
+            select: { plan: true, trialEndsAt: true },
           });
           if (tenant) {
             token.plan = tenant.plan;
+            token.trialEndsAt = tenant.trialEndsAt?.toISOString() ?? null;
           }
         } catch {
-          // DB error — keep existing plan in token
+          // DB error — keep existing values in token
         }
       }
 

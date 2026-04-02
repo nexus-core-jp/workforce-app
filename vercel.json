@@ -1,5 +1,5 @@
 {
-  "buildCommand": "bash scripts/setup-face-models.sh || true; next build",
+  "buildCommand": "bash scripts/setup-face-models.sh || true; npx tsx scripts/check-db.ts && next build",
   "functions": {
     "src/app/api/admin/export/route.ts": {
       "maxDuration": 120
@@ -10,5 +10,11 @@
     "src/app/api/stripe/webhook/route.ts": {
       "maxDuration": 30
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/health",
+      "schedule": "*/10 * * * *"
+    }
+  ]
 }

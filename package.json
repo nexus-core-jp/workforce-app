@@ -16,6 +16,7 @@
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
+    "db:check": "tsx scripts/check-db.ts",
     "db:seed": "tsx prisma/seed.ts",
     "db:setup-sa": "tsx scripts/setup-super-admin.ts",
     "postinstall": "prisma generate"
