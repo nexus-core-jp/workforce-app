@@ -8,6 +8,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { rateLimit } from "@/lib/rate-limit";
+import { createSignedCookieValue, readSignedCookieValue } from "@/lib/signed-cookie";
 import { verifyTotp } from "@/lib/totp";
 
 import type { Provider } from "next-auth/providers";
@@ -20,6 +21,35 @@ if (!process.env.AUTH_SECRET || process.env.AUTH_SECRET.length < 32) {
 }
 
 const PLAN_REFRESH_TTL_MS = Number(process.env.PLAN_REFRESH_TTL_MS ?? 5 * 60 * 1000);
+const LINE_LOOKUP_TIMEOUT_MS = Number(process.env.LINE_LOOKUP_TIMEOUT_MS ?? 4000);
+
+interface LineAuthCtx {
+  tenant: string;
+}
+
+interface LineAuthUserCtx {
+  userId: string;
+  tenantId: string;
+  role: string;
+  departmentId: string | null;
+  plan: string;
+  trialEndsAt: string | null;
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`timeout:${ms}ms`)), ms);
+    promise
+      .then((v) => {
+        clearTimeout(t);
+        resolve(v);
+      })
+      .catch((err) => {
+        clearTimeout(t);
+        reject(err);
+      });
+  });
+}
 
 const signInSchema = z.object({
   tenant: z.string().min(1),
@@ -165,28 +195,81 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   callbacks: {
     async signIn({ user, account }) {
       if (account?.provider === "line") {
-        // LINE login: verify the user has a linked lineId in the specified tenant
         const cookieStore = await cookies();
-        const tenantSlug = cookieStore.get("line_auth_tenant")?.value;
-        if (!tenantSlug) return "/login?error=NO_TENANT";
+        const authSecret = process.env.AUTH_SECRET!;
+        const tenantCtx = readSignedCookieValue<LineAuthCtx>(
+          cookieStore.get("line_auth_ctx")?.value,
+          authSecret,
+        );
+        if (!tenantCtx?.tenant) {
+          logger.warn("line_login.invalid_tenant_context");
+          return "/login?error=INVALID_TENANT_STATE";
+        }
+        const tenantSlug = tenantCtx.tenant;
 
-        const dbUser = await prisma.user.findFirst({
-          where: {
-            lineId: user.id,
-            active: true,
-            tenant: { slug: tenantSlug },
-          },
-          select: { id: true, tenantId: true },
-        });
+        let dbUser;
+        try {
+          dbUser = await withTimeout(
+            prisma.user.findFirst({
+              where: {
+                lineId: user.id,
+                active: true,
+                tenant: { slug: tenantSlug },
+              },
+              select: {
+                id: true,
+                tenantId: true,
+                role: true,
+                departmentId: true,
+                tenant: {
+                  select: { plan: true, trialEndsAt: true },
+                },
+              },
+            }),
+            LINE_LOOKUP_TIMEOUT_MS,
+          );
+        } catch (err) {
+          logger.error("line_login.lookup_failed", { tenantSlug }, err as Error);
+          return "/login?error=SERVICE_UNAVAILABLE";
+        }
 
         const tenantExists = dbUser
           ? true
-          : !!(await prisma.tenant.findUnique({
-              where: { slug: tenantSlug },
-              select: { id: true },
-            }));
-        if (!tenantExists) return "/login?error=TENANT_NOT_FOUND";
-        if (!dbUser) return "/login?error=LINE_NOT_LINKED";
+          : !!(await withTimeout(
+              prisma.tenant.findUnique({
+                where: { slug: tenantSlug },
+                select: { id: true },
+              }),
+              LINE_LOOKUP_TIMEOUT_MS,
+            ).catch(() => null));
+        if (!tenantExists) {
+          logger.info("line_login.tenant_not_found", { tenantSlug });
+          return "/login?error=TENANT_NOT_FOUND";
+        }
+        if (!dbUser) {
+          logger.info("line_login.not_linked", { tenantSlug });
+          return "/login?error=LINE_NOT_LINKED";
+        }
+
+        const signedUserCtx = createSignedCookieValue<LineAuthUserCtx>(
+          {
+            userId: dbUser.id,
+            tenantId: dbUser.tenantId,
+            role: dbUser.role,
+            departmentId: dbUser.departmentId ?? null,
+            plan: dbUser.tenant.plan,
+            trialEndsAt: dbUser.tenant.trialEndsAt?.toISOString() ?? null,
+          },
+          authSecret,
+          2 * 60 * 1000,
+        );
+        cookieStore.set("line_auth_user", signedUserCtx, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: "lax",
+          path: "/",
+          maxAge: 2 * 60,
+        });
 
         // Audit: LINE login success
         prisma.auditLog.create({
@@ -220,38 +303,60 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
 
       if (account?.provider === "line" && user) {
-        // LINE login — look up user from DB to populate JWT claims
         const cookieStore = await cookies();
-        const tenantSlug = cookieStore.get("line_auth_tenant")?.value;
-        if (tenantSlug) {
-          const dbUser = await prisma.user.findFirst({
-            where: {
-              lineId: user.id,
-              active: true,
-              tenant: { slug: tenantSlug },
-            },
-            select: {
-              id: true,
-              tenantId: true,
-              role: true,
-              departmentId: true,
-              tenant: {
-                select: {
-                  plan: true,
-                  trialEndsAt: true,
-                },
-              },
-            },
-          });
-          if (dbUser) {
-            token.sub = dbUser.id;
-            token.tenantId = dbUser.tenantId;
-            token.role = dbUser.role;
-            token.departmentId = dbUser.departmentId ?? null;
-            token.plan = dbUser.tenant.plan;
-            token.trialEndsAt = dbUser.tenant.trialEndsAt?.toISOString() ?? null;
-            token.planCheckedAt = Date.now();
+        const authSecret = process.env.AUTH_SECRET!;
+        const signedCtx = readSignedCookieValue<LineAuthUserCtx>(
+          cookieStore.get("line_auth_user")?.value,
+          authSecret,
+        );
+        if (signedCtx) {
+          token.sub = signedCtx.userId;
+          token.tenantId = signedCtx.tenantId;
+          token.role = signedCtx.role;
+          token.departmentId = signedCtx.departmentId;
+          token.plan = signedCtx.plan;
+          token.trialEndsAt = signedCtx.trialEndsAt;
+          token.planCheckedAt = Date.now();
+          cookieStore.delete("line_auth_user");
+          cookieStore.delete("line_auth_ctx");
+        } else {
+          const tenantCtx = readSignedCookieValue<LineAuthCtx>(
+            cookieStore.get("line_auth_ctx")?.value,
+            authSecret,
+          );
+          if (!tenantCtx?.tenant) {
+            logger.warn("line_login.user_context_missing");
+            return token;
           }
+          const fallbackUser = await withTimeout(
+            prisma.user.findFirst({
+              where: {
+                lineId: user.id,
+                active: true,
+                tenant: { slug: tenantCtx.tenant },
+              },
+              select: {
+                id: true,
+                tenantId: true,
+                role: true,
+                departmentId: true,
+                tenant: { select: { plan: true, trialEndsAt: true } },
+              },
+            }),
+            LINE_LOOKUP_TIMEOUT_MS,
+          ).catch(() => null);
+          if (!fallbackUser) {
+            logger.warn("line_login.fallback_lookup_failed", { tenant: tenantCtx.tenant });
+            return token;
+          }
+          token.sub = fallbackUser.id;
+          token.tenantId = fallbackUser.tenantId;
+          token.role = fallbackUser.role;
+          token.departmentId = fallbackUser.departmentId ?? null;
+          token.plan = fallbackUser.tenant.plan;
+          token.trialEndsAt = fallbackUser.tenant.trialEndsAt?.toISOString() ?? null;
+          token.planCheckedAt = Date.now();
+          cookieStore.delete("line_auth_ctx");
         }
       }
 

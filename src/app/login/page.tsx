@@ -9,6 +9,8 @@ const LINE_ERROR_MESSAGES: Record<string, string> = {
   LINE_NOT_LINKED: "このLINEアカウントは会社IDに紐づいていません。先にアカウント連携を行ってください。",
   NO_TENANT: "会社IDを入力してからLINEログインを押してください。",
   TENANT_NOT_FOUND: "指定された会社IDが見つかりません。",
+  INVALID_TENANT_STATE: "LINEログイン情報が無効です。再度会社IDを入力してください。",
+  LINE_CONTEXT_INVALID: "LINEログイン情報の検証に失敗しました。再度お試しください。",
 };
 
 export default function LoginPage() {
@@ -28,27 +30,43 @@ function LoginForm() {
   const [totpCode, setTotpCode] = useState("");
   const [needsTotp, setNeedsTotp] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lineErrorCode, setLineErrorCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Show errors from LINE OAuth redirects
   useEffect(() => {
     const errParam = searchParams.get("error");
     if (errParam && LINE_ERROR_MESSAGES[errParam]) {
+      setLineErrorCode(errParam);
       setError(LINE_ERROR_MESSAGES[errParam]);
+    } else {
+      setLineErrorCode(null);
     }
   }, [searchParams]);
 
-  const handleLineLogin = () => {
+  const handleLineLogin = async () => {
     if (!tenant.trim()) {
       setError("会社IDを入力してからLINEログインを押してください");
       return;
     }
     setError(null);
     setLoading(true);
-    // Store tenant in cookie so the auth callback can identify which tenant to check
-    const securePart = window.location.protocol === 'https:' ? '; Secure' : '';
-    document.cookie = `line_auth_tenant=${encodeURIComponent(tenant)}; path=/; max-age=600; SameSite=Lax${securePart}`;
-    signIn("line", { callbackUrl: "/dashboard" });
+    try {
+      const res = await fetch("/api/auth/line/start", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ tenant }),
+      });
+      if (!res.ok) {
+        setError("LINEログインの準備に失敗しました。会社IDを確認して再度お試しください。");
+        setLoading(false);
+        return;
+      }
+      signIn("line", { callbackUrl: "/dashboard" });
+    } catch {
+      setError("LINEログインの準備に失敗しました。ネットワーク接続を確認してください。");
+      setLoading(false);
+    }
   };
 
   return (
@@ -172,6 +190,11 @@ function LoginForm() {
           </div>
 
           {error ? <p className="error-text" role="alert">{error}</p> : null}
+          {lineErrorCode === "LINE_NOT_LINKED" ? (
+            <p style={{ fontSize: 13, marginTop: 4 }}>
+              まず <Link href="/register">会社登録または連携設定</Link> を行ってください。
+            </p>
+          ) : null}
         </form>
 
         {/* Divider */}
@@ -211,6 +234,9 @@ function LoginForm() {
         </p>
         <p style={{ marginTop: 8, fontSize: 14, textAlign: "center" }}>
           <Link href="/register">新規会社登録はこちら</Link>
+        </p>
+        <p style={{ marginTop: 8, fontSize: 13, textAlign: "center", color: "var(--color-text-secondary)" }}>
+          LINEで失敗した場合は、メールアドレスとパスワードでログインしてください。
         </p>
       </div>
     </main>

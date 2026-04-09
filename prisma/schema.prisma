@@ -59,6 +59,7 @@ model User {
   @@unique([tenantId, lineId])
   @@index([tenantId, role])
   @@index([tenantId, departmentId])
+  @@index([tenantId, lineId, active])
 }
 
 model Account {

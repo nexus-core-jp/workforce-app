@@ -15,8 +15,18 @@ const registerDataSchema = z.object({
   email: z.string().email(),
 });
 
+async function fetchWithTimeout(input: string, init: RequestInit, timeoutMs: number) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function exchangeCodeForProfile(code: string, redirectUri: string) {
-  const tokenRes = await fetch("https://api.line.me/oauth2/v2.1/token", {
+  const tokenReqInit: RequestInit = {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -26,16 +36,25 @@ async function exchangeCodeForProfile(code: string, redirectUri: string) {
       client_id: process.env.LINE_CHANNEL_ID!,
       client_secret: process.env.LINE_CHANNEL_SECRET!,
     }),
-  });
+  };
+  let tokenRes = await fetchWithTimeout("https://api.line.me/oauth2/v2.1/token", tokenReqInit, 8000).catch(() => null);
+  if (!tokenRes?.ok) {
+    tokenRes = await fetchWithTimeout("https://api.line.me/oauth2/v2.1/token", tokenReqInit, 8000).catch(() => null);
+  }
 
-  if (!tokenRes.ok) return null;
+  if (!tokenRes?.ok) return null;
   const tokenData = await tokenRes.json();
 
-  const profileRes = await fetch("https://api.line.me/v2/profile", {
+  let profileRes = await fetchWithTimeout("https://api.line.me/v2/profile", {
     headers: { Authorization: `Bearer ${tokenData.access_token}` },
-  });
+  }, 8000).catch(() => null);
+  if (!profileRes?.ok) {
+    profileRes = await fetchWithTimeout("https://api.line.me/v2/profile", {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` },
+    }, 8000).catch(() => null);
+  }
 
-  if (!profileRes.ok) return null;
+  if (!profileRes?.ok) return null;
   return profileRes.json() as Promise<{
     userId: string;
     displayName: string;
