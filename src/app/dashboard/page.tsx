@@ -7,7 +7,7 @@ import { HISTORY_DAYS, LOCALE, DATE_LOCALE, TIMEZONE } from "@/lib/constants";
 import { prisma } from "@/lib/db";
 import { toSessionUser } from "@/lib/session";
 import { addJstDays, formatLocal, startOfJstDay } from "@/lib/time";
-import { calcDailyOvertime, STANDARD_DAILY_MINUTES, MONTHLY_OVERTIME_LIMIT_MINUTES } from "@/lib/overtime";
+import { STANDARD_DAILY_MINUTES, MONTHLY_OVERTIME_LIMIT_MINUTES } from "@/lib/overtime";
 import { isFaceAuthAvailable } from "@/lib/face-auth-config";
 
 import { Logo } from "../Logo";
@@ -40,17 +40,32 @@ export default async function DashboardPage() {
   const monthStart = startOfJstDay(new Date(Date.UTC(cYear, cMon - 1, 1)));
 
   // Parallelize independent DB queries for faster page load
-  const [tenant, entry, history, myPendingCount, dailyReport, leaveLedger, myPendingLeaves, monthEntries, faceDescriptorCount] = await Promise.all([
+  const [tenant, entry, history, myPendingCount, dailyReport, grantedLeaveSum, usedLeaveSum, myPendingLeaves, monthlyOvertimeRows, faceDescriptorCount] = await Promise.all([
     prisma.tenant.findUnique({
       where: { id: tenantId },
       select: { plan: true, trialEndsAt: true, faceAuthEnabled: true },
     }),
     prisma.timeEntry.findUnique({
       where: { tenantId_userId_date: { tenantId, userId, date: today } },
+      select: {
+        clockInAt: true,
+        clockOutAt: true,
+        breakStartAt: true,
+        breakEndAt: true,
+        workMinutes: true,
+      },
     }),
     prisma.timeEntry.findMany({
       where: { tenantId, userId, date: { gte: from, lte: today } },
       orderBy: { date: "desc" },
+      select: {
+        date: true,
+        clockInAt: true,
+        breakStartAt: true,
+        breakEndAt: true,
+        clockOutAt: true,
+        workMinutes: true,
+      },
     }),
     prisma.attendanceCorrection.count({
       where: { tenantId, userId, status: "PENDING" },
@@ -58,15 +73,25 @@ export default async function DashboardPage() {
     prisma.dailyReport.findUnique({
       where: { tenantId_userId_date: { tenantId, userId, date: today } },
     }),
-    prisma.leaveLedgerEntry.findMany({
-      where: { tenantId, userId },
+    prisma.leaveLedgerEntry.aggregate({
+      where: { tenantId, userId, kind: { in: ["GRANT", "ADJUST"] } },
+      _sum: { days: true },
+    }),
+    prisma.leaveLedgerEntry.aggregate({
+      where: { tenantId, userId, kind: "USE" },
+      _sum: { days: true },
     }),
     prisma.leaveRequest.count({
       where: { tenantId, userId, status: "PENDING" },
     }),
-    prisma.timeEntry.findMany({
-      where: { tenantId, userId, date: { gte: monthStart, lte: today } },
-    }),
+    prisma.$queryRaw`
+      SELECT COALESCE(SUM(GREATEST("workMinutes" - ${STANDARD_DAILY_MINUTES}, 0)), 0)::int AS total
+      FROM "TimeEntry"
+      WHERE "tenantId" = ${tenantId}
+        AND "userId" = ${userId}
+        AND "date" >= ${monthStart}
+        AND "date" <= ${today}
+    ` as Promise<Array<{ total: number }>>,
     prisma.faceDescriptor.count({
       where: { tenantId, userId },
     }),
@@ -112,21 +137,12 @@ export default async function DashboardPage() {
   });
 
   // Leave balance
-  let leaveBalance = 0;
-  for (const ledgerEntry of leaveLedger) {
-    const days = Number(ledgerEntry.days);
-    if (ledgerEntry.kind === "USE") {
-      leaveBalance -= days;
-    } else {
-      leaveBalance += days;
-    }
-  }
+  const grantedLeaveDays = Number(grantedLeaveSum._sum.days ?? 0);
+  const usedLeaveDays = Number(usedLeaveSum._sum.days ?? 0);
+  const leaveBalance = grantedLeaveDays - usedLeaveDays;
 
   // Monthly overtime calculation
-  let monthlyOvertimeMinutes = 0;
-  for (const me of monthEntries) {
-    monthlyOvertimeMinutes += calcDailyOvertime(me.workMinutes, STANDARD_DAILY_MINUTES);
-  }
+  const monthlyOvertimeMinutes = monthlyOvertimeRows[0]?.total ?? 0;
   const overtimePercentage = Math.round((monthlyOvertimeMinutes / MONTHLY_OVERTIME_LIMIT_MINUTES) * 100);
 
   const faceAuthEnabled = isFaceAuthAvailable() && (tenant?.faceAuthEnabled ?? false);

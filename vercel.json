@@ -1,5 +1,6 @@
 {
   "buildCommand": "bash scripts/setup-face-models.sh || true; npx tsx scripts/check-db.ts && next build",
+  "regions": ["hnd1"],
   "functions": {
     "src/app/api/admin/export/route.ts": {
       "maxDuration": 120

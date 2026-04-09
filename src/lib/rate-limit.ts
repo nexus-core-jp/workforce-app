@@ -10,6 +10,41 @@
 
 import { prisma } from "@/lib/db";
 
+const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
+const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+const hasRedisRateLimit = Boolean(redisUrl && redisToken);
+
+async function rateLimitRedis(
+  key: string,
+  maxRequests: number,
+  windowMs: number,
+): Promise<{ limited: boolean; retryAfterMs?: number }> {
+  const bucketKey = `rl:${key}`;
+  const response = await fetch(`${redisUrl}/pipeline`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${redisToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify([
+      ["INCR", bucketKey],
+      ["PEXPIRE", bucketKey, windowMs, "NX"],
+      ["PTTL", bucketKey],
+    ]),
+    cache: "no-store",
+  });
+
+  if (!response.ok) throw new Error(`Redis rate-limit failed: ${response.status}`);
+  const payload = (await response.json()) as Array<{ result?: number }>;
+  const count = Number(payload?.[0]?.result ?? 0);
+  const ttl = Number(payload?.[2]?.result ?? windowMs);
+
+  if (count > maxRequests) {
+    return { limited: true, retryAfterMs: ttl > 0 ? ttl : windowMs };
+  }
+  return { limited: false };
+}
+
 // ---------------------------------------------------------------------------
 // 1. Database-backed rate limiter (sliding window)
 // ---------------------------------------------------------------------------
@@ -26,6 +61,14 @@ export async function rateLimit(
   maxRequests: number,
   windowMs: number,
 ): Promise<{ limited: boolean; retryAfterMs?: number }> {
+  if (hasRedisRateLimit) {
+    try {
+      return await rateLimitRedis(key, maxRequests, windowMs);
+    } catch {
+      // Fall through to DB-based limiter when Redis is unavailable.
+    }
+  }
+
   const now = new Date();
   const cutoff = new Date(now.getTime() - windowMs);
 
@@ -49,13 +92,15 @@ export async function rateLimit(
       return { limited: true, retryAfterMs };
     }
 
-    // Record this request and clean up old entries atomically
-    await prisma.$transaction([
-      prisma.rateLimitEntry.create({ data: { key } }),
-      prisma.rateLimitEntry.deleteMany({
-        where: { createdAt: { lt: cutoff } },
-      }),
-    ]);
+    // Record this request first; cleanup is best-effort and key-scoped.
+    await prisma.rateLimitEntry.create({ data: { key } });
+    void prisma.rateLimitEntry
+      .deleteMany({
+        where: { key, createdAt: { lt: cutoff } },
+      })
+      .catch(() => {
+        // Ignore cleanup failure.
+      });
 
     return { limited: false };
   } catch {

@@ -13,6 +13,8 @@ const protectedPrefixes = [
 ];
 
 export async function proxy(req: NextRequest) {
+  if (req.nextUrl.pathname === "/super-admin/login") return NextResponse.next();
+
   const secureCookie = req.nextUrl.protocol === "https:";
   const token = await getToken({ req, secret: process.env.AUTH_SECRET, secureCookie });
   const { pathname } = req.nextUrl;
@@ -53,6 +55,12 @@ export async function proxy(req: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon\\.ico|icon-.*|manifest\\.json|api/auth|api/line|api/stripe/webhook|api/payjp/webhook|api/health|api/cron|login|register|forgot-password|reset-password|verify-email|suspended|super-admin/login).*)",
+    "/admin/:path*",
+    "/dashboard/:path*",
+    "/super-admin/:path*",
+    "/leave-requests/:path*",
+    "/daily-reports/:path*",
+    "/corrections/:path*",
+    "/suspended/:path*",
   ],
 };

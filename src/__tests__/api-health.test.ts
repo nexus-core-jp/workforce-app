@@ -4,11 +4,15 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("@/lib/db", () => ({
   prisma: {
     $queryRaw: vi.fn().mockResolvedValue([{ result: 1 }]),
+    tenant: {
+      count: vi.fn().mockResolvedValue(1),
+    },
   },
 }));
 
 describe("GET /api/health", () => {
   it("returns healthy status", async () => {
+    process.env.AUTH_SECRET = "x".repeat(48);
     const { GET } = await import("@/app/api/health/route");
     const response = await GET();
     const data = await response.json();
@@ -27,6 +31,6 @@ describe("GET /api/health", () => {
     const data = await response.json();
 
     expect(response.status).toBe(503);
-    expect(data.status).toBe("error");
+    expect(data.status).toBe("degraded");
   });
 });
