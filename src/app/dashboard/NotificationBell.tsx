@@ -19,15 +19,32 @@ export function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const ref = useRef<HTMLDivElement>(null);
+  const countEtagRef = useRef<string | null>(null);
+  const listEtagRef = useRef<string | null>(null);
+  const hasLoadedListRef = useRef(false);
 
-  const load = useCallback(() => {
+  const load = useCallback((full = false) => {
     startTransition(async () => {
       try {
-        const res = await fetch("/api/notifications");
+        const headers: Record<string, string> = {};
+        const etagRef = full ? listEtagRef : countEtagRef;
+        if (etagRef.current && (!full || hasLoadedListRef.current)) {
+          headers["If-None-Match"] = etagRef.current;
+        }
+        const res = await fetch(full ? "/api/notifications?full=1" : "/api/notifications", { headers });
+        if (res.status === 304) {
+          setLoadError(false);
+          return;
+        }
         const data = await res.json();
         if (data.ok) {
-          setNotifications(data.notifications);
-          setUnreadCount(data.unreadCount);
+          const etag = res.headers.get("ETag");
+          if (etag) etagRef.current = etag;
+          if (typeof data.unreadCount === "number") setUnreadCount(data.unreadCount);
+          if (Array.isArray(data.notifications)) {
+            hasLoadedListRef.current = true;
+            setNotifications(data.notifications);
+          }
           setLoadError(false);
         }
       } catch {
@@ -37,10 +54,45 @@ export function NotificationBell() {
   }, []);
 
   useEffect(() => {
-    load();
-    const interval = setInterval(load, 30000); // poll every 30s
-    return () => clearInterval(interval);
+    load(false);
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        load(false);
+      }
+    }, 120000); // poll every 2 minutes while visible
+    const onVisible = () => {
+      if (document.visibilityState === "visible") load(false);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [load]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof EventSource === "undefined") return;
+    const es = new EventSource("/api/notifications/stream");
+    es.addEventListener("unread", (event) => {
+      try {
+        const parsed = JSON.parse((event as MessageEvent).data) as { unreadCount?: number };
+        if (typeof parsed.unreadCount === "number") {
+          setUnreadCount(parsed.unreadCount);
+          if (isOpen) load(true);
+        }
+      } catch {
+        // ignore parse failure
+      }
+    });
+    es.onerror = () => {
+      // Keep polling fallback active.
+    };
+    return () => es.close();
+  }, [isOpen, load]);
+
+  useEffect(() => {
+    if (isOpen) load(true);
+  }, [isOpen, load]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -61,7 +113,7 @@ export function NotificationBell() {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ all: true }),
         });
-        load();
+        load(true);
       } catch {
         // ignore
       }
@@ -76,7 +128,7 @@ export function NotificationBell() {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ id }),
         });
-        load();
+        load(true);
       } catch {
         // ignore
       }
@@ -173,7 +225,13 @@ export function NotificationBell() {
             <div style={{ padding: 24, textAlign: "center", color: "var(--color-danger)", fontSize: 13 }}>
               通知の読み込みに失敗しました
               <br />
-              <button className="btn-compact" style={{ marginTop: 8, fontSize: 12 }} onClick={load}>再読み込み</button>
+              <button
+                className="btn-compact"
+                style={{ marginTop: 8, fontSize: 12 }}
+                onClick={() => load(isOpen)}
+              >
+                再読み込み
+              </button>
             </div>
           ) : notifications.length === 0 ? (
             <div style={{ padding: 24, textAlign: "center", color: "var(--color-text-secondary)", fontSize: 13 }}>

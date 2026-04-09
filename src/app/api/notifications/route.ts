@@ -9,7 +9,7 @@ function jsonError(message: string, status = 400) {
 }
 
 /** GET: list my notifications */
-export async function GET() {
+export async function GET(req: Request) {
   const session = await auth();
   if (!session?.user) return jsonError("Unauthorized", 401);
 
@@ -18,16 +18,56 @@ export async function GET() {
 
   const { tenantId, id: userId } = user;
 
-  const [notifications, unreadCount] = await Promise.all([
-    prisma.notification.findMany({
+  const [latest, unreadCount] = await Promise.all([
+    prisma.notification.findFirst({
       where: { tenantId, userId },
       orderBy: { createdAt: "desc" },
-      take: 50,
+      select: { id: true, createdAt: true },
     }),
     prisma.notification.count({
       where: { tenantId, userId, read: false },
     }),
   ]);
 
-  return NextResponse.json({ ok: true, notifications, unreadCount });
+  const etag = `"${latest?.id ?? "none"}:${latest?.createdAt?.getTime() ?? 0}:${unreadCount}"`;
+  const ifNoneMatch = req.headers.get("if-none-match");
+  const { searchParams } = new URL(req.url);
+  const full = searchParams.get("full") === "1";
+  if (ifNoneMatch === etag) {
+    return new NextResponse(null, {
+      status: 304,
+      headers: {
+        ETag: etag,
+        "Cache-Control": "private, max-age=0, must-revalidate",
+      },
+    });
+  }
+
+  if (!full) {
+    return NextResponse.json(
+      { ok: true, unreadCount },
+      {
+        headers: {
+          ETag: etag,
+          "Cache-Control": "private, max-age=0, must-revalidate",
+        },
+      },
+    );
+  }
+
+  const notifications = await prisma.notification.findMany({
+    where: { tenantId, userId },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+  });
+
+  return NextResponse.json(
+    { ok: true, notifications, unreadCount },
+    {
+      headers: {
+        ETag: etag,
+        "Cache-Control": "private, max-age=0, must-revalidate",
+      },
+    },
+  );
 }

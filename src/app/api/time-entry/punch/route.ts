@@ -5,7 +5,6 @@ import { jsonError, requireAuth } from "@/lib/api";
 import { isMonthClosed } from "@/lib/close";
 import { prisma } from "@/lib/db";
 import { findBestMatch, isValidDescriptor } from "@/lib/face-match";
-import { guardSuspended } from "@/lib/tenant-guard";
 import { startOfJstDay } from "@/lib/time";
 import { computeWorkMinutes } from "@/lib/work-time";
 
@@ -15,9 +14,6 @@ export async function POST(req: Request) {
   const result = await requireAuth();
   if (!result.ok) return result.response;
   const { id: userId, tenantId } = result.user;
-
-  const suspended = await guardSuspended(tenantId);
-  if (suspended) return suspended;
 
   let body: Record<string, unknown> = {};
   try {
@@ -32,43 +28,50 @@ export async function POST(req: Request) {
   const today = startOfJstDay(new Date());
   const now = new Date();
 
-  if (await isMonthClosed(tenantId, today)) {
+  const [tenant, monthClosed] = await Promise.all([
+    prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { faceAuthEnabled: true, plan: true, trialEndsAt: true },
+    }),
+    isMonthClosed(tenantId, today),
+  ]);
+
+  if (!tenant) return jsonError("Tenant not found", 404);
+  if (tenant.plan === "SUSPENDED") return jsonError("アカウントが停止されています", 403);
+  if (tenant.plan === "TRIAL" && tenant.trialEndsAt && tenant.trialEndsAt.getTime() < Date.now()) {
+    return jsonError("トライアル期間が終了しました", 403);
+  }
+
+  if (monthClosed) {
     return jsonError(ERROR_MESSAGES.MONTH_CLOSED, 409);
   }
 
   // Face verification when enabled (required for CLOCK_IN and CLOCK_OUT)
-  if (action === "CLOCK_IN" || action === "CLOCK_OUT") {
-    const tenant = await prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: { faceAuthEnabled: true },
+  if ((action === "CLOCK_IN" || action === "CLOCK_OUT") && tenant.faceAuthEnabled) {
+    const faceDescriptor = body?.faceDescriptor;
+    if (!isValidDescriptor(faceDescriptor)) {
+      return jsonError("顔認証が必要です", 403);
+    }
+
+    const stored = await prisma.faceDescriptor.findMany({
+      where: { tenantId, userId },
+      select: { descriptor: true },
     });
 
-    if (tenant?.faceAuthEnabled) {
-      const faceDescriptor = body?.faceDescriptor;
-      if (!isValidDescriptor(faceDescriptor)) {
-        return jsonError("顔認証が必要です", 403);
-      }
-
-      const stored = await prisma.faceDescriptor.findMany({
-        where: { tenantId, userId },
-        select: { descriptor: true },
-      });
-
-      if (stored.length === 0) {
-        return jsonError(
-          "顔が未登録です。先に顔登録を行ってください。",
-          403,
-        );
-      }
-
-      const faceResult = findBestMatch(
-        faceDescriptor,
-        stored.map((s) => JSON.parse(s.descriptor as string) as number[]),
+    if (stored.length === 0) {
+      return jsonError(
+        "顔が未登録です。先に顔登録を行ってください。",
+        403,
       );
+    }
 
-      if (!faceResult.matched) {
-        return jsonError("顔認証に失敗しました", 403);
-      }
+    const faceResult = findBestMatch(
+      faceDescriptor,
+      stored.map((s) => JSON.parse(s.descriptor as string) as number[]),
+    );
+
+    if (!faceResult.matched) {
+      return jsonError("顔認証に失敗しました", 403);
     }
   }
 

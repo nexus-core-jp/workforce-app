@@ -19,6 +19,8 @@ if (!process.env.AUTH_SECRET || process.env.AUTH_SECRET.length < 32) {
   );
 }
 
+const PLAN_REFRESH_TTL_MS = Number(process.env.PLAN_REFRESH_TTL_MS ?? 5 * 60 * 1000);
+
 const signInSchema = z.object({
   tenant: z.string().min(1),
   email: z.string().email(),
@@ -44,21 +46,35 @@ const providers: Provider[] = [
       if (limited) throw new Error("RATE_LIMITED");
 
       // Wrap DB queries so a connection failure surfaces as a distinct error
-      let dbTenant;
       let user;
       try {
-        dbTenant = await prisma.tenant.findUnique({ where: { slug: tenant } });
-        if (!dbTenant) return null;
-
-        user = await prisma.user.findUnique({
-          where: { tenantId_email: { tenantId: dbTenant.id, email } },
+        user = await prisma.user.findFirst({
+          where: {
+            email,
+            active: true,
+            tenant: { slug: tenant },
+          },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            tenantId: true,
+            role: true,
+            departmentId: true,
+            passwordHash: true,
+            totpEnabled: true,
+            totpSecret: true,
+            tenant: {
+              select: { plan: true, trialEndsAt: true },
+            },
+          },
         });
       } catch (err) {
         logger.error("login.db_error", { tenant, email }, err as Error);
         throw new Error("SERVICE_UNAVAILABLE");
       }
 
-      if (!user?.active) return null;
+      if (!user) return null;
       if (!user.passwordHash) return null;
 
       const ok = await bcrypt.compare(password, user.passwordHash);
@@ -66,7 +82,7 @@ const providers: Provider[] = [
         // Audit: login failed
         prisma.auditLog.create({
           data: {
-            tenantId: dbTenant.id,
+            tenantId: user.tenantId,
             actorUserId: user.id,
             action: "LOGIN_FAILED",
             entityType: "User",
@@ -87,7 +103,7 @@ const providers: Provider[] = [
         if (!totpValid) {
           prisma.auditLog.create({
             data: {
-              tenantId: dbTenant.id,
+              tenantId: user.tenantId,
               actorUserId: user.id,
               action: "LOGIN_FAILED",
               entityType: "User",
@@ -102,7 +118,7 @@ const providers: Provider[] = [
       // Audit: login success
       prisma.auditLog.create({
         data: {
-          tenantId: dbTenant.id,
+          tenantId: user.tenantId,
           actorUserId: user.id,
           action: "LOGIN_SUCCESS",
           entityType: "User",
@@ -118,8 +134,8 @@ const providers: Provider[] = [
         tenantId: user.tenantId,
         role: user.role,
         departmentId: user.departmentId,
-        plan: dbTenant.plan,
-        trialEndsAt: dbTenant.trialEndsAt?.toISOString() ?? null,
+        plan: user.tenant.plan,
+        trialEndsAt: user.tenant.trialEndsAt?.toISOString() ?? null,
       };
     },
   }),
@@ -154,20 +170,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const tenantSlug = cookieStore.get("line_auth_tenant")?.value;
         if (!tenantSlug) return "/login?error=NO_TENANT";
 
-        const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
-        if (!tenant) return "/login?error=TENANT_NOT_FOUND";
-
-        const lineId = user.id;
         const dbUser = await prisma.user.findFirst({
-          where: { tenantId: tenant.id, lineId, active: true },
+          where: {
+            lineId: user.id,
+            active: true,
+            tenant: { slug: tenantSlug },
+          },
+          select: { id: true, tenantId: true },
         });
 
+        const tenantExists = dbUser
+          ? true
+          : !!(await prisma.tenant.findUnique({
+              where: { slug: tenantSlug },
+              select: { id: true },
+            }));
+        if (!tenantExists) return "/login?error=TENANT_NOT_FOUND";
         if (!dbUser) return "/login?error=LINE_NOT_LINKED";
 
         // Audit: LINE login success
         prisma.auditLog.create({
           data: {
-            tenantId: tenant.id,
+            tenantId: dbUser.tenantId,
             actorUserId: dbUser.id,
             action: "LOGIN_SUCCESS_LINE",
             entityType: "User",
@@ -189,6 +213,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.departmentId = (u.departmentId as string) ?? null;
         token.plan = u.plan as string;
         token.trialEndsAt = (u.trialEndsAt as string) ?? null;
+        token.planCheckedAt = Date.now();
       }
       if (account?.provider === "line" && account.access_token) {
         token.lineAccessToken = account.access_token;
@@ -199,24 +224,43 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const cookieStore = await cookies();
         const tenantSlug = cookieStore.get("line_auth_tenant")?.value;
         if (tenantSlug) {
-          const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
-          if (tenant) {
-            const dbUser = await prisma.user.findFirst({
-              where: { tenantId: tenant.id, lineId: user.id, active: true },
-            });
-            if (dbUser) {
-              token.sub = dbUser.id;
-              token.tenantId = dbUser.tenantId;
-              token.role = dbUser.role;
-              token.departmentId = dbUser.departmentId ?? null;
-              token.plan = tenant.plan;
-            }
+          const dbUser = await prisma.user.findFirst({
+            where: {
+              lineId: user.id,
+              active: true,
+              tenant: { slug: tenantSlug },
+            },
+            select: {
+              id: true,
+              tenantId: true,
+              role: true,
+              departmentId: true,
+              tenant: {
+                select: {
+                  plan: true,
+                  trialEndsAt: true,
+                },
+              },
+            },
+          });
+          if (dbUser) {
+            token.sub = dbUser.id;
+            token.tenantId = dbUser.tenantId;
+            token.role = dbUser.role;
+            token.departmentId = dbUser.departmentId ?? null;
+            token.plan = dbUser.tenant.plan;
+            token.trialEndsAt = dbUser.tenant.trialEndsAt?.toISOString() ?? null;
+            token.planCheckedAt = Date.now();
           }
         }
       }
 
-      // Refresh plan + trialEndsAt from DB on every request to catch SA plan changes immediately
-      if (token.tenantId && token.role !== "SUPER_ADMIN") {
+      // Refresh plan/trial with TTL to avoid DB hit on every authenticated request.
+      const nowMs = Date.now();
+      const shouldRefreshPlan =
+        typeof token.planCheckedAt !== "number" ||
+        nowMs - token.planCheckedAt > PLAN_REFRESH_TTL_MS;
+      if (shouldRefreshPlan && token.tenantId && token.role !== "SUPER_ADMIN") {
         try {
           const tenant = await prisma.tenant.findUnique({
             where: { id: token.tenantId as string },
@@ -228,6 +272,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           }
         } catch {
           // DB error — keep existing values in token
+        } finally {
+          token.planCheckedAt = nowMs;
         }
       }
 
