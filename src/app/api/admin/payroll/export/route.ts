@@ -6,9 +6,13 @@ import { prisma } from "@/lib/db";
 import { toCsv } from "@/lib/csv";
 import { toSessionUser } from "@/lib/session";
 import { calculateMonthlyPayroll, generateZenginCsv } from "@/lib/payroll";
+import {
+  generateFreeeAttendanceCsv,
+  generateMoneyForwardAttendanceCsv,
+} from "@/lib/payroll-external";
 
 const querySchema = z.object({
-  type: z.enum(["payroll", "bank-transfer", "payroll-detail"]),
+  type: z.enum(["payroll", "bank-transfer", "payroll-detail", "freee", "moneyforward"]),
   month: z.string().regex(/^\d{4}-\d{2}$/),
 });
 
@@ -118,6 +122,38 @@ export async function GET(req: Request) {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
         "Content-Disposition": `attachment; filename="bank_transfer_${month}.csv"`,
+      },
+    });
+  }
+
+  if (type === "freee" || type === "moneyforward") {
+    const rows = payrolls.map((p) => ({
+      employeeCode: p.cfg.user.email,
+      name: p.cfg.user.name ?? "",
+      totalWorkMinutes: p.result.totalWorkMinutes,
+      scheduledMinutes: p.result.scheduledMinutes,
+      overtimeMinutes: p.result.overtimeMinutes,
+      lateNightMinutes: p.result.lateNightMinutes,
+      holidayMinutes: p.result.holidayMinutes,
+      workDays: p.result.workDays,
+      absentDays: p.result.absentDays,
+      basePay: p.result.basePay,
+      overtimePay: p.result.overtimePay,
+      lateNightPay: p.result.lateNightPay,
+      holidayPay: p.result.holidayPay,
+      commuteAllowance: p.result.commuteAllowance,
+      otherAllowances: p.result.otherAllowances,
+      grossPay: p.result.grossPay,
+    }));
+    const csv =
+      type === "freee"
+        ? generateFreeeAttendanceCsv(month, rows)
+        : generateMoneyForwardAttendanceCsv(month, rows);
+    const filename = type === "freee" ? `freee_attendance_${month}.csv` : `mf_attendance_${month}.csv`;
+    return new Response(csv, {
+      headers: {
+        "Content-Type": "text/csv; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${filename}"`,
       },
     });
   }

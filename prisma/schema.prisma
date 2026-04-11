@@ -21,7 +21,14 @@ model User {
   lineId       String?
   totpSecret   String?
   totpEnabled  Boolean   @default(false)
+  // TOTP recovery codes — JSON array of bcrypt hashes. Each code can be used
+  // once; used codes are removed from the array.
+  totpRecoveryCodes Json?
   active       Boolean   @default(true)
+  // Employment lifecycle
+  hireDate     DateTime? // 入社日 (date-only semantics, JST midnight)
+  retiredAt    DateTime? // 退職日 (null while active)
+  employmentType EmploymentType @default(FULL_TIME)
 
   tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
@@ -114,6 +121,7 @@ model Tenant {
   payjpCustomerId       String?    @unique
   payjpSubscriptionId   String?
   faceAuthEnabled       Boolean    @default(false)
+  onboardingCompleted   Boolean    @default(false)
   createdAt             DateTime   @default(now())
   updatedAt             DateTime   @updatedAt
 
@@ -635,4 +643,11 @@ enum PayType {
 enum PayrollStatus {
   DRAFT      // 計算済み・未確定
   CONFIRMED  // 管理者確定
+}
+
+enum EmploymentType {
+  FULL_TIME      // 正社員
+  PART_TIME      // パート・アルバイト
+  CONTRACT       // 契約社員
+  OUTSOURCED     // 業務委託
 }

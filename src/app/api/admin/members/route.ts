@@ -14,6 +14,8 @@ const addSchema = z.object({
   password: passwordSchema,
   role: z.enum(["EMPLOYEE", "ADMIN"]),
   departmentId: z.string().nullable().optional(),
+  hireDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  employmentType: z.enum(["FULL_TIME", "PART_TIME", "CONTRACT", "OUTSOURCED"]).optional(),
 });
 
 const patchSchema = z.object({
@@ -43,7 +45,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: msg }, { status: 400 });
   }
 
-  const { name, email, password, role, departmentId } = parsed.data;
+  const { name, email, password, role, departmentId, hireDate, employmentType } = parsed.data;
 
   // Check email uniqueness within tenant
   const existing = await prisma.user.findUnique({
@@ -57,6 +59,12 @@ export async function POST(request: Request) {
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
+  const hireDateValue = hireDate
+    ? (() => {
+        const [y, m, d] = hireDate.split("-").map(Number);
+        return new Date(Date.UTC(y, m - 1, d) - 9 * 60 * 60 * 1000);
+      })()
+    : null;
 
   const newUser = await prisma.user.create({
     data: {
@@ -66,6 +74,8 @@ export async function POST(request: Request) {
       role,
       passwordHash,
       departmentId: departmentId ?? null,
+      hireDate: hireDateValue,
+      employmentType: employmentType ?? "FULL_TIME",
     },
   });
 
@@ -125,17 +135,25 @@ export async function PATCH(request: Request) {
   let afterJson: object = {};
 
   switch (action) {
-    case "deactivate":
-      await prisma.user.update({ where: { id: userId }, data: { active: false } });
+    case "deactivate": {
+      const retiredAt = new Date();
+      await prisma.user.update({
+        where: { id: userId },
+        data: { active: false, retiredAt },
+      });
       auditAction = "MEMBER_DEACTIVATED";
-      beforeJson = { active: true };
-      afterJson = { active: false };
+      beforeJson = { active: true, retiredAt: null };
+      afterJson = { active: false, retiredAt: retiredAt.toISOString() };
       break;
+    }
     case "reactivate":
-      await prisma.user.update({ where: { id: userId }, data: { active: true } });
+      await prisma.user.update({
+        where: { id: userId },
+        data: { active: true, retiredAt: null },
+      });
       auditAction = "MEMBER_REACTIVATED";
       beforeJson = { active: false };
-      afterJson = { active: true };
+      afterJson = { active: true, retiredAt: null };
       break;
     case "changeRole":
       if (!role) {

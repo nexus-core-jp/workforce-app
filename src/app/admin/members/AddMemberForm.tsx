@@ -15,6 +15,8 @@ export function AddMemberForm({ departments }: { departments: Department[] }) {
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"EMPLOYEE" | "ADMIN">("EMPLOYEE");
   const [departmentId, setDepartmentId] = useState<string>("");
+  const [hireDate, setHireDate] = useState<string>("");
+  const [employmentType, setEmploymentType] = useState<"FULL_TIME" | "PART_TIME" | "CONTRACT" | "OUTSOURCED">("FULL_TIME");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -34,6 +36,8 @@ export function AddMemberForm({ departments }: { departments: Department[] }) {
           password,
           role,
           departmentId: departmentId || null,
+          hireDate: hireDate || undefined,
+          employmentType,
         }),
       });
       const data = await res.json();
@@ -46,6 +50,8 @@ export function AddMemberForm({ departments }: { departments: Department[] }) {
         setPassword("");
         setRole("EMPLOYEE");
         setDepartmentId("");
+        setHireDate("");
+        setEmploymentType("FULL_TIME");
         router.refresh();
       }
     } catch {
@@ -114,6 +120,21 @@ export function AddMemberForm({ departments }: { departments: Department[] }) {
               部署は管理画面の部署管理から追加できます
             </span>
           )}
+        </label>
+
+        <label style={{ display: "grid", gap: 4 }}>
+          <span>雇用形態</span>
+          <select value={employmentType} onChange={(e) => setEmploymentType(e.target.value as typeof employmentType)}>
+            <option value="FULL_TIME">正社員</option>
+            <option value="PART_TIME">パート・アルバイト</option>
+            <option value="CONTRACT">契約社員</option>
+            <option value="OUTSOURCED">業務委託</option>
+          </select>
+        </label>
+
+        <label style={{ display: "grid", gap: 4 }}>
+          <span>入社日 <span style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>(年次有給の自動付与に使用)</span></span>
+          <input type="date" value={hireDate} onChange={(e) => setHireDate(e.target.value)} />
         </label>
 
         <button type="submit" data-variant="primary" disabled={loading}>

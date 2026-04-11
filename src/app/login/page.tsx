@@ -28,6 +28,8 @@ function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [totpCode, setTotpCode] = useState("");
+  const [recoveryCode, setRecoveryCode] = useState("");
+  const [useRecoveryCode, setUseRecoveryCode] = useState(false);
   const [needsTotp, setNeedsTotp] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -90,7 +92,8 @@ function LoginForm() {
                 tenant,
                 email,
                 password,
-                totpCode: needsTotp ? totpCode : undefined,
+                totpCode: needsTotp && !useRecoveryCode ? totpCode : undefined,
+                recoveryCode: needsTotp && useRecoveryCode ? recoveryCode : undefined,
                 redirect: false,
               });
               if (res?.error) {
@@ -155,7 +158,7 @@ function LoginForm() {
               />
             </label>
 
-            {needsTotp && (
+            {needsTotp && !useRecoveryCode && (
               <label style={{ display: "grid", gap: 6 }}>
                 <span>認証コード（2FA）</span>
                 <input
@@ -170,6 +173,35 @@ function LoginForm() {
                   placeholder="6桁の認証コード"
                   autoFocus
                 />
+                <button
+                  type="button"
+                  onClick={() => { setUseRecoveryCode(true); setTotpCode(""); }}
+                  style={{ background: "none", border: "none", color: "var(--color-primary)", fontSize: 12, textAlign: "left", padding: 0, cursor: "pointer" }}
+                >
+                  認証アプリを使えない場合（リカバリーコードを使う）
+                </button>
+              </label>
+            )}
+
+            {needsTotp && useRecoveryCode && (
+              <label style={{ display: "grid", gap: 6 }}>
+                <span>リカバリーコード</span>
+                <input
+                  value={recoveryCode}
+                  onChange={(e) => setRecoveryCode(e.target.value)}
+                  type="text"
+                  required
+                  autoComplete="off"
+                  placeholder="xxxxx-xxxxx"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={() => { setUseRecoveryCode(false); setRecoveryCode(""); }}
+                  style={{ background: "none", border: "none", color: "var(--color-primary)", fontSize: 12, textAlign: "left", padding: 0, cursor: "pointer" }}
+                >
+                  認証アプリでログイン
+                </button>
               </label>
             )}
 

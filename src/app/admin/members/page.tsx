@@ -41,6 +41,9 @@ export default async function MembersPage({
         createdAt: true,
         departmentId: true,
         department: { select: { name: true } },
+        hireDate: true,
+        retiredAt: true,
+        employmentType: true,
       },
       skip: (page - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
@@ -55,6 +58,16 @@ export default async function MembersPage({
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
+  const fmtDate = (d: Date | null) =>
+    d
+      ? new Intl.DateTimeFormat("ja-JP", {
+          timeZone: "Asia/Tokyo",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }).format(d)
+      : null;
+
   const membersUi = members.map((m) => ({
     id: m.id,
     name: m.name,
@@ -64,6 +77,9 @@ export default async function MembersPage({
     createdAt: m.createdAt.toISOString(),
     departmentId: m.departmentId,
     departmentName: m.department?.name ?? null,
+    hireDateLabel: fmtDate(m.hireDate),
+    retiredAtLabel: fmtDate(m.retiredAt),
+    employmentType: m.employmentType as "FULL_TIME" | "PART_TIME" | "CONTRACT" | "OUTSOURCED",
   }));
 
   const departmentsUi = departments.map((d) => ({ id: d.id, name: d.name }));

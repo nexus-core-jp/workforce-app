@@ -4,7 +4,7 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
 import { toSessionUser } from "@/lib/session";
-import { verifyTotp } from "@/lib/totp";
+import { generateRecoveryCodes, verifyTotp } from "@/lib/totp";
 
 const schema = z.object({
   code: z.string().length(6),
@@ -52,10 +52,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "コードが正しくありません" }, { status: 400 });
   }
 
+  // Generate recovery codes and store hashes. The plaintext is returned to
+  // the caller exactly once — they are NOT persisted anywhere in plaintext.
+  const { plaintext, hashes } = await generateRecoveryCodes();
+
   await prisma.$transaction([
     prisma.user.update({
       where: { id: user.id },
-      data: { totpEnabled: true },
+      data: {
+        totpEnabled: true,
+        totpRecoveryCodes: hashes,
+      },
     }),
     prisma.auditLog.create({
       data: {
@@ -68,5 +75,5 @@ export async function POST(request: Request) {
     }),
   ]);
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, recoveryCodes: plaintext });
 }

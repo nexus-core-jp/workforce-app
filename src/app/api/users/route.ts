@@ -19,7 +19,17 @@ export async function GET() {
 
   const users = await prisma.user.findMany({
     where: { tenantId },
-    select: { id: true, email: true, name: true, role: true, active: true, createdAt: true },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+      active: true,
+      createdAt: true,
+      hireDate: true,
+      retiredAt: true,
+      employmentType: true,
+    },
     orderBy: { createdAt: "asc" },
   });
 
@@ -31,6 +41,8 @@ const createSchema = z.object({
   name: z.string().min(1).max(100),
   password: z.string().min(8),
   role: z.enum(["EMPLOYEE", "ADMIN"]),
+  hireDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  employmentType: z.enum(["FULL_TIME", "PART_TIME", "CONTRACT", "OUTSOURCED"]).optional(),
 });
 
 export async function POST(req: Request) {
@@ -50,6 +62,12 @@ export async function POST(req: Request) {
   if (existing) return jsonError("Email already exists", 409);
 
   const passwordHash = await bcrypt.hash(input.data.password, 10);
+  const hireDate = input.data.hireDate
+    ? (() => {
+        const [y, m, d] = input.data.hireDate.split("-").map(Number);
+        return new Date(Date.UTC(y, m - 1, d) - 9 * 60 * 60 * 1000);
+      })()
+    : null;
   const user = await prisma.user.create({
     data: {
       tenantId,
@@ -57,6 +75,8 @@ export async function POST(req: Request) {
       name: input.data.name,
       role: input.data.role,
       passwordHash,
+      hireDate,
+      employmentType: input.data.employmentType ?? "FULL_TIME",
     },
   });
 

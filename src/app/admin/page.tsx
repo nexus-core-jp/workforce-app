@@ -34,6 +34,15 @@ export default async function AdminPage() {
     redirect("/dashboard");
   }
 
+  // First-time admins are sent to the onboarding wizard
+  const onboardingCheck = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { onboardingCompleted: true },
+  });
+  if (onboardingCheck && !onboardingCheck.onboardingCompleted) {
+    redirect("/onboarding");
+  }
+
   const today = startOfJstDay(new Date());
   const month = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Tokyo",
@@ -209,6 +218,9 @@ export default async function AdminPage() {
     };
   });
 
+  // Import compliance helper on the server and compute per-member status.
+  const { computeComplianceStatus } = await import("@/lib/leave-grant");
+
   const leaveBalanceItems = allMembers.map((m) => {
     const entries = allLedgerEntries.filter((e) => e.userId === m.id);
     let granted = 0;
@@ -223,12 +235,26 @@ export default async function AdminPage() {
     }
     const balance = granted - used;
     const consumptionRate = granted > 0 ? Math.round((used / granted) * 100) : 0;
+
+    // 5日取得義務ステータス
+    const grants = entries
+      .filter((e) => e.kind === "GRANT")
+      .map((e) => ({ days: Number(e.days), effectiveDate: e.effectiveDate }));
+    const uses = entries
+      .filter((e) => e.kind === "USE")
+      .map((e) => ({ days: Number(e.days), effectiveDate: e.effectiveDate }));
+    const compliance = computeComplianceStatus(m.id, grants, uses);
+
     return {
       name: m.name ?? m.email,
       granted,
       used,
       balance,
       consumptionRate,
+      complianceLevel: compliance.level,
+      daysShort: compliance.daysShort,
+      daysUntilDeadline: compliance.daysUntilDeadline,
+      subjectTo5DayRule: compliance.subjectTo5DayRule,
     };
   });
 
@@ -299,6 +325,7 @@ export default async function AdminPage() {
             { href: "/admin/shifts", label: "シフト管理", adminOnly: true },
             { href: "/admin/payroll", label: "給与設定", adminOnly: true },
             { href: "/admin/payroll/calc", label: "給与計算", adminOnly: true },
+            { href: "/admin/labor-dashboard", label: "労働時間ダッシュボード", adminOnly: true },
             { href: "/admin/holidays", label: "休日カレンダー", adminOnly: true },
             { href: "/admin/billing", label: "プラン・請求", adminOnly: true },
             { href: "/admin/audit-logs", label: "監査ログ", adminOnly: true },

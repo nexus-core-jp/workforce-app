@@ -8,7 +8,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { rateLimit } from "@/lib/rate-limit";
-import { verifyTotp } from "@/lib/totp";
+import { verifyRecoveryCode, verifyTotp } from "@/lib/totp";
 
 import type { Provider } from "next-auth/providers";
 
@@ -26,6 +26,7 @@ const signInSchema = z.object({
   email: z.string().email(),
   password: z.string().min(8),
   totpCode: z.string().optional(), // 6-digit TOTP code (required if 2FA enabled)
+  recoveryCode: z.string().optional(), // Single-use recovery code (alternate to totpCode)
 });
 
 // Build providers list — LINE is only added when env vars are configured
@@ -39,7 +40,7 @@ const providers: Provider[] = [
       totpCode: { label: "TOTP Code", type: "text" },
     },
     async authorize(raw) {
-      const { tenant, email, password, totpCode } = signInSchema.parse(raw);
+      const { tenant, email, password, totpCode, recoveryCode } = signInSchema.parse(raw);
 
       // Rate limit: 10 attempts per tenant+email per 15 minutes
       const { limited } = await rateLimit(`login:${tenant}:${email}`, 10, 15 * 60 * 1000);
@@ -64,6 +65,7 @@ const providers: Provider[] = [
             passwordHash: true,
             totpEnabled: true,
             totpSecret: true,
+            totpRecoveryCodes: true,
             tenant: {
               select: { plan: true, trialEndsAt: true },
             },
@@ -106,14 +108,40 @@ const providers: Provider[] = [
         return null;
       }
 
-      // Check TOTP if 2FA is enabled
+      // Check TOTP if 2FA is enabled. Accept either the 6-digit code OR a
+      // single-use recovery code (with priority to TOTP when both provided).
       if (user.totpEnabled && user.totpSecret) {
-        if (!totpCode) {
+        if (!totpCode && !recoveryCode) {
           // Signal the client that TOTP is required (throw with specific message)
           throw new Error("TOTP_REQUIRED");
         }
-        const totpValid = verifyTotp(user.totpSecret, totpCode);
-        if (!totpValid) {
+
+        let authOk = false;
+        let usedRecoveryIndex = -1;
+
+        if (totpCode) {
+          authOk = verifyTotp(user.totpSecret, totpCode);
+        }
+
+        if (!authOk && recoveryCode) {
+          const stored = Array.isArray(user.totpRecoveryCodes)
+            ? (user.totpRecoveryCodes as string[])
+            : [];
+          usedRecoveryIndex = await verifyRecoveryCode(recoveryCode, stored);
+          if (usedRecoveryIndex >= 0) {
+            authOk = true;
+            // Remove the consumed code so it cannot be reused.
+            const remaining = stored.filter((_, i) => i !== usedRecoveryIndex);
+            prisma.user
+              .update({
+                where: { id: user.id },
+                data: { totpRecoveryCodes: remaining },
+              })
+              .catch((err) => logger.error("totp.recovery_consume_failed", {}, err));
+          }
+        }
+
+        if (!authOk) {
           prisma.auditLog.create({
             data: {
               tenantId: user.tenantId,
@@ -125,6 +153,19 @@ const providers: Provider[] = [
             },
           }).catch((err) => logger.error("audit.write_failed", {}, err));
           throw new Error("TOTP_INVALID");
+        }
+
+        if (usedRecoveryIndex >= 0) {
+          // Audit recovery code usage so admins see it
+          prisma.auditLog.create({
+            data: {
+              tenantId: user.tenantId,
+              actorUserId: user.id,
+              action: "TOTP_RECOVERY_USED",
+              entityType: "User",
+              entityId: user.id,
+            },
+          }).catch((err) => logger.error("audit.write_failed", {}, err));
         }
       }
 

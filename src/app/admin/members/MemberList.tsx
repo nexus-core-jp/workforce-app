@@ -19,11 +19,21 @@ interface Member {
   createdAt: string;
   departmentId: string | null;
   departmentName: string | null;
+  hireDateLabel: string | null;
+  retiredAtLabel: string | null;
+  employmentType: "FULL_TIME" | "PART_TIME" | "CONTRACT" | "OUTSOURCED";
 }
 
 const roleLabels: Record<string, string> = {
   EMPLOYEE: "従業員",
   ADMIN: "管理者",
+};
+
+const employmentLabels: Record<string, string> = {
+  FULL_TIME: "正社員",
+  PART_TIME: "パート",
+  CONTRACT: "契約",
+  OUTSOURCED: "委託",
 };
 
 export function MemberList({
@@ -95,6 +105,8 @@ export function MemberList({
               <th>名前</th>
               <th>メール</th>
               <th>部署</th>
+              <th>雇用形態</th>
+              <th>入社日</th>
               <th>役割</th>
               <th>状態</th>
               <th>アクション</th>
@@ -127,6 +139,12 @@ export function MemberList({
                       ))}
                     </select>
                   </td>
+                  <td style={{ fontSize: 13 }}>
+                    {employmentLabels[m.employmentType] ?? m.employmentType}
+                  </td>
+                  <td style={{ fontSize: 13, whiteSpace: "nowrap" }}>
+                    {m.hireDateLabel ?? "—"}
+                  </td>
                   <td>
                     {isSelf ? (
                       <span className={`badge ${m.role === "ADMIN" ? "badge-closed" : "badge-open"}`}>
@@ -154,8 +172,13 @@ export function MemberList({
                   </td>
                   <td>
                     <span className={`badge ${m.active ? "badge-approved" : "badge-rejected"}`}>
-                      {m.active ? "有効" : "退社"}
+                      {m.active ? "在籍" : "退社"}
                     </span>
+                    {m.retiredAtLabel && (
+                      <div style={{ fontSize: 11, color: "var(--color-text-secondary)" }}>
+                        {m.retiredAtLabel}
+                      </div>
+                    )}
                   </td>
                   <td>
                     {isSelf ? (

@@ -83,7 +83,9 @@ export function PayrollCalcPanel({ defaultMonth }: { defaultMonth: string }) {
     }
   };
 
-  const download = (type: "payroll" | "bank-transfer" | "payroll-detail") => {
+  const download = (
+    type: "payroll" | "bank-transfer" | "payroll-detail" | "freee" | "moneyforward",
+  ) => {
     window.location.href = `/api/admin/payroll/export?type=${type}&month=${month}`;
   };
 
@@ -294,6 +296,12 @@ export function PayrollCalcPanel({ defaultMonth }: { defaultMonth: string }) {
             </button>
             <button type="button" onClick={() => download("bank-transfer")}>
               振込データCSV (全銀)
+            </button>
+            <button type="button" onClick={() => download("freee")} title="freee人事労務の勤怠インポート用">
+              freee用CSV
+            </button>
+            <button type="button" onClick={() => download("moneyforward")} title="マネーフォワード クラウド給与の勤怠インポート用">
+              MF用CSV
             </button>
           </div>
         </>
