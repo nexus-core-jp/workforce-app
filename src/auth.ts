@@ -77,6 +77,19 @@ const providers: Provider[] = [
       if (!user) return null;
       if (!user.passwordHash) return null;
 
+      // Block suspended tenants and expired trials at the auth boundary
+      // so no session JWT is issued for unauthorized accounts.
+      if (user.tenant.plan === "SUSPENDED") {
+        throw new Error("ACCOUNT_SUSPENDED");
+      }
+      if (
+        user.tenant.plan === "TRIAL" &&
+        user.tenant.trialEndsAt &&
+        user.tenant.trialEndsAt.getTime() < Date.now()
+      ) {
+        throw new Error("TRIAL_EXPIRED");
+      }
+
       const ok = await bcrypt.compare(password, user.passwordHash);
       if (!ok) {
         // Audit: login failed
@@ -176,7 +189,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             active: true,
             tenant: { slug: tenantSlug },
           },
-          select: { id: true, tenantId: true },
+          select: {
+            id: true,
+            tenantId: true,
+            tenant: { select: { plan: true, trialEndsAt: true } },
+          },
         });
 
         const tenantExists = dbUser
@@ -185,8 +202,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
               where: { slug: tenantSlug },
               select: { id: true },
             }));
-        if (!tenantExists) return "/login?error=TENANT_NOT_FOUND";
-        if (!dbUser) return "/login?error=LINE_NOT_LINKED";
+        if (!tenantExists) {
+          cookieStore.delete("line_auth_tenant");
+          return "/login?error=TENANT_NOT_FOUND";
+        }
+        if (!dbUser) {
+          cookieStore.delete("line_auth_tenant");
+          return "/login?error=LINE_NOT_LINKED";
+        }
+
+        // Block suspended / expired-trial tenants at the auth boundary
+        if (dbUser.tenant.plan === "SUSPENDED") {
+          cookieStore.delete("line_auth_tenant");
+          return "/login?error=ACCOUNT_SUSPENDED";
+        }
+        if (
+          dbUser.tenant.plan === "TRIAL" &&
+          dbUser.tenant.trialEndsAt &&
+          dbUser.tenant.trialEndsAt.getTime() < Date.now()
+        ) {
+          cookieStore.delete("line_auth_tenant");
+          return "/login?error=TRIAL_EXPIRED";
+        }
 
         // Audit: LINE login success
         prisma.auditLog.create({
@@ -199,6 +236,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           },
         }).catch((err) => logger.error("audit.write_failed", {}, err));
 
+        // Clean up the tenant cookie — it has served its purpose and should
+        // not persist beyond this login attempt (prevents multi-tenant confusion).
+        cookieStore.delete("line_auth_tenant");
         return true;
       }
       return true;

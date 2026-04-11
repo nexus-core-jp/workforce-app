@@ -116,22 +116,6 @@ async function handleRegister(
     return NextResponse.redirect(new URL("/register?error=INVALID_DATA", request.url));
   }
 
-  // Check slug uniqueness
-  const existing = await prisma.tenant.findUnique({ where: { slug: regData.slug } });
-  if (existing) {
-    return NextResponse.redirect(
-      new URL(`/register?error=${encodeURIComponent("この会社IDは既に使用されています")}`, request.url),
-    );
-  }
-
-  // Check if this LINE ID is already linked to someone
-  const existingLineUser = await prisma.user.findFirst({ where: { lineId } });
-  if (existingLineUser) {
-    return NextResponse.redirect(
-      new URL("/register?error=LINE_ALREADY_USED", request.url),
-    );
-  }
-
   // Create company + admin user with LINE ID
   const trialEndsAt = new Date();
   trialEndsAt.setDate(trialEndsAt.getDate() + 30);
@@ -139,53 +123,86 @@ async function handleRegister(
   // Generate a random placeholder password hash (user has no password; they use LINE)
   const placeholderHash = await bcrypt.hash(crypto.randomUUID(), 10);
 
-  await prisma.$transaction(async (tx) => {
-    const tenant = await tx.tenant.create({
-      data: {
-        name: regData.companyName,
-        slug: regData.slug,
-        plan: "TRIAL",
-        trialEndsAt,
-      },
-    });
+  // Uniqueness checks live inside the transaction to close the race between
+  // check and insert. We throw sentinel errors and translate them to redirects
+  // after the transaction unwinds.
+  const SLUG_TAKEN = "SLUG_TAKEN";
+  const LINE_TAKEN = "LINE_TAKEN";
 
-    const adminUser = await tx.user.create({
-      data: {
-        tenantId: tenant.id,
-        email: regData.email,
-        name: regData.adminName,
-        role: "ADMIN",
-        passwordHash: placeholderHash,
-        lineId,
-      },
-    });
+  try {
+    await prisma.$transaction(async (tx) => {
+      const existingTenant = await tx.tenant.findUnique({
+        where: { slug: regData.slug },
+        select: { id: true },
+      });
+      if (existingTenant) throw new Error(SLUG_TAKEN);
 
-    // Also create Account record so LINE webhook punch works
-    await tx.account.create({
-      data: {
-        userId: adminUser.id,
-        type: "oauth",
-        provider: "line",
-        providerAccountId: lineId,
-      },
-    });
+      const existingLineUser = await tx.user.findFirst({
+        where: { lineId },
+        select: { id: true },
+      });
+      if (existingLineUser) throw new Error(LINE_TAKEN);
 
-    await tx.auditLog.create({
-      data: {
-        tenantId: tenant.id,
-        actorUserId: adminUser.id,
-        action: "TENANT_REGISTERED_LINE",
-        entityType: "Tenant",
-        entityId: tenant.id,
-        afterJson: {
-          companyName: regData.companyName,
+      const tenant = await tx.tenant.create({
+        data: {
+          name: regData.companyName,
           slug: regData.slug,
-          adminEmail: regData.email,
-          authMethod: "line",
+          plan: "TRIAL",
+          trialEndsAt,
         },
-      },
+      });
+
+      const adminUser = await tx.user.create({
+        data: {
+          tenantId: tenant.id,
+          email: regData.email,
+          name: regData.adminName,
+          role: "ADMIN",
+          passwordHash: placeholderHash,
+          lineId,
+        },
+      });
+
+      // Also create Account record so LINE webhook punch works
+      await tx.account.create({
+        data: {
+          userId: adminUser.id,
+          type: "oauth",
+          provider: "line",
+          providerAccountId: lineId,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          tenantId: tenant.id,
+          actorUserId: adminUser.id,
+          action: "TENANT_REGISTERED_LINE",
+          entityType: "Tenant",
+          entityId: tenant.id,
+          afterJson: {
+            companyName: regData.companyName,
+            slug: regData.slug,
+            adminEmail: regData.email,
+            authMethod: "line",
+          },
+        },
+      });
     });
-  });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "";
+    if (message === SLUG_TAKEN) {
+      return NextResponse.redirect(
+        new URL(`/register?error=${encodeURIComponent("この会社IDは既に使用されています")}`, request.url),
+      );
+    }
+    if (message === LINE_TAKEN) {
+      return NextResponse.redirect(
+        new URL("/register?error=LINE_ALREADY_USED", request.url),
+      );
+    }
+    throw err;
+  }
 
   // Fire-and-forget welcome email
   sendWelcomeEmail(regData.email, regData.adminName, regData.companyName, regData.slug, "line").catch((err) => {
@@ -206,19 +223,28 @@ async function handleLink(request: Request, lineId: string) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // Check if this LINE ID is already linked to another user
-  const existingLineUser = await prisma.user.findFirst({
-    where: { lineId, NOT: { id: user.id } },
-  });
-  if (existingLineUser) {
-    return NextResponse.redirect(new URL("/dashboard?error=LINE_ALREADY_LINKED", request.url));
-  }
+  // Uniqueness check + update inside a transaction to eliminate the race
+  // between check and write (two users could otherwise claim the same LINE ID).
+  const LINE_TAKEN = "LINE_TAKEN";
+  try {
+    await prisma.$transaction(async (tx) => {
+      const existingLineUser = await tx.user.findFirst({
+        where: { lineId, NOT: { id: user.id } },
+        select: { id: true },
+      });
+      if (existingLineUser) throw new Error(LINE_TAKEN);
 
-  // Save lineId to current user
-  await prisma.user.update({
-    where: { id: user.id },
-    data: { lineId },
-  });
+      await tx.user.update({
+        where: { id: user.id },
+        data: { lineId },
+      });
+    });
+  } catch (err) {
+    if (err instanceof Error && err.message === LINE_TAKEN) {
+      return NextResponse.redirect(new URL("/dashboard?error=LINE_ALREADY_LINKED", request.url));
+    }
+    throw err;
+  }
 
   // Audit log
   prisma.auditLog.create({

@@ -6,6 +6,8 @@ declare module "next-auth" {
     tenantId?: string;
     role?: string;
     departmentId?: string | null;
+    plan?: string;
+    trialEndsAt?: string | null;
   }
 
   interface Session {
@@ -16,6 +18,8 @@ declare module "next-auth" {
       tenantId: string;
       role: import("@/generated/prisma").UserRole;
       departmentId?: string | null;
+      plan?: string;
+      trialEndsAt?: string | null;
     } & DefaultSession["user"];
   }
 }
@@ -25,5 +29,9 @@ declare module "next-auth/jwt" {
     tenantId?: string;
     role?: string;
     departmentId?: string | null;
+    plan?: string;
+    trialEndsAt?: string | null;
+    planCheckedAt?: number;
+    lineAccessToken?: string;
   }
 }

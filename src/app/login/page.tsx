@@ -9,6 +9,8 @@ const LINE_ERROR_MESSAGES: Record<string, string> = {
   LINE_NOT_LINKED: "このLINEアカウントは会社IDに紐づいていません。先にアカウント連携を行ってください。",
   NO_TENANT: "会社IDを入力してからLINEログインを押してください。",
   TENANT_NOT_FOUND: "指定された会社IDが見つかりません。",
+  ACCOUNT_SUSPENDED: "このアカウントは現在停止中です。管理者にお問い合わせください。",
+  TRIAL_EXPIRED: "トライアル期間が終了しました。プランのご契約をお願いします。",
 };
 
 export default function LoginPage() {
@@ -45,9 +47,10 @@ function LoginForm() {
     }
     setError(null);
     setLoading(true);
-    // Store tenant in cookie so the auth callback can identify which tenant to check
+    // Store tenant in cookie so the auth callback can identify which tenant to check.
+    // TTL = 1200s (20 min) to tolerate slow networks / LINE consent screens.
     const securePart = window.location.protocol === 'https:' ? '; Secure' : '';
-    document.cookie = `line_auth_tenant=${encodeURIComponent(tenant)}; path=/; max-age=600; SameSite=Lax${securePart}`;
+    document.cookie = `line_auth_tenant=${encodeURIComponent(tenant)}; path=/; max-age=1200; SameSite=Lax${securePart}`;
     signIn("line", { callbackUrl: "/dashboard" });
   };
 
@@ -100,6 +103,10 @@ function LoginForm() {
                   setError("認証コードが正しくありません");
                 } else if (res.error.includes("SERVICE_UNAVAILABLE")) {
                   setError("サーバーに一時的な問題が発生しています。しばらくしてから再度お試しください。");
+                } else if (res.error.includes("ACCOUNT_SUSPENDED")) {
+                  setError("このアカウントは現在停止中です。管理者にお問い合わせください。");
+                } else if (res.error.includes("TRIAL_EXPIRED")) {
+                  setError("トライアル期間が終了しました。プランのご契約をお願いします。");
                 } else {
                   setError("会社ID（会社登録時の英数字ID）、メールアドレス、またはパスワードが正しくありません");
                 }
