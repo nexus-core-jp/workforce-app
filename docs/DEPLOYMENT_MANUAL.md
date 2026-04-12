@@ -80,27 +80,17 @@ Vercelプロジェクトの **Settings > Environment Variables** に、以下の
 
 ### 3.3 データベースマイグレーション
 
-Vercelデプロイが成功した後、データベースのテーブルを作成する必要があります。ローカル環境で以下のコマンドを実行してください。
+本番マイグレーションは **GitHub Actions** の `DB migrate (production-safe)` を使って実行してください。  
+Vercel build ではマイグレーションを実行しません（デプロイ安全性のため分離）。
 
-```bash
-# リポジトリをクローン
-git clone https://github.com/nexus-core-jp/workforce-app.git
-cd workforce-app
+実行手順:
 
-# 依存パッケージをインストール
-npm install
+1. GitHub Actionsで `DB migrate (production-safe)` を開く
+2. `confirm` に `migrate-production` を入力
+3. `run_seed` は通常 `false`（初期構築時のみ `true`）
+4. 実行して `Prisma migrate status` と `Prisma migrate deploy` の成功を確認
 
-# .envファイルにDATABASE_URLを設定
-echo 'DATABASE_URL="postgres://user:password@host/dbname?sslmode=require"' > .env
-
-# Prismaクライアントを生成
-npx prisma generate
-
-# マイグレーションを本番DBに適用
-npx prisma migrate deploy
-```
-
-> **注意**: 本番データベースに対して `prisma migrate dev` を実行しないでください。`prisma migrate deploy` は既存のマイグレーションファイルのみを適用し、スキーマの変更は行いません。
+> **注意**: 本番データベースに対して `prisma migrate dev` を実行しないでください。`prisma migrate deploy` のみ使用します。
 
 ### 3.4 LINE Developers Console の設定
 

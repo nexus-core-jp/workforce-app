@@ -1,15 +1,35 @@
-name: DB setup
+name: DB migrate (production-safe)
 
 on:
   workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "migrate-production" to run'
+        required: true
+        type: string
+      run_seed:
+        description: "Run seed after migration (usually false for production)"
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   migrate:
     runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: production-db-migrate
+      cancel-in-progress: false
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       AUTH_SECRET: ${{ secrets.AUTH_SECRET }}
     steps:
+      - name: Validate confirmation
+        if: ${{ inputs.confirm != 'migrate-production' }}
+        run: |
+          echo "Confirmation mismatch. Re-run and set confirm=migrate-production"
+          exit 1
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -22,8 +42,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Prisma migrate status
+        run: npx prisma migrate status
+
       - name: Prisma migrate deploy
         run: npx prisma migrate deploy
 
       - name: Seed database
+        if: ${{ inputs.run_seed == true }}
         run: npm run db:seed

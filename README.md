@@ -554,7 +554,7 @@ SA は `__platform` テナントの `SUPER_ADMIN` ロールのユーザーです
 
 - proxy ミドルウェア: ログイン後のページ遷移時に `/suspended` へリダイレクト
 - API ガード: データ変更 API で `403` を返却
-- JWT リフレッシュ: プランと `trialEndsAt` を毎リクエストで DB から再取得し、SA の変更を即時反映
+- JWT リフレッシュ: プランと `trialEndsAt` は TTL（既定5分）で再取得し、DB負荷を抑えつつ反映
 - Cron 監視: トライアル期限が 7 日以内 / 期限切れのテナントを検知して Slack 通知
 
 ### 5. seed のべき等性
